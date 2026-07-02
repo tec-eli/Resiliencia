@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.patterns.retry;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
+import io.github.teceli.resiliencia.core.api.PatternKind;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,6 +15,13 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  * Demonstrates Policy + Retry + synchronous execution working together.
  */
 class RetryPatternTest {
+    @Test
+    void should_reportRetryKind_when_patternKindQueried() {
+        var retry = Retry.<String>create();
+
+        assertThat(retry.patternKind()).isEqualTo(PatternKind.RETRY);
+    }
+
     @Test
     void should_succeedAfterRetry_when_operationFailsInitially() {
         var counter = new AtomicInteger(0);

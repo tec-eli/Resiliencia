@@ -41,6 +41,16 @@ public interface Resilient<T> {
         return "custom";
     }
 
+    /**
+     * The kind of this pattern, used for internal comparisons (e.g. Policy order validation).
+     * Unlike {@link #patternName()}, which is a free-form observability label, this is a closed
+     * enum the library can reason about exhaustively.
+     * Defaults to {@link PatternKind#CUSTOM} for user-defined Resilient implementations.
+     */
+    default PatternKind patternKind() {
+        return PatternKind.CUSTOM;
+    }
+
     @FunctionalInterface
     interface Operation<T> {
         T execute() throws ResilienciaException;

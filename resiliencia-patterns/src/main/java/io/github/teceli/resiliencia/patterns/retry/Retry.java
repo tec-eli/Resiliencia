@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.patterns.retry;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
+import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
 import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.spi.Clock;
@@ -77,6 +78,11 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
     @Override
     public String patternName() {
         return "retry";
+    }
+
+    @Override
+    public PatternKind patternKind() {
+        return PatternKind.RETRY;
     }
 
     @Override
