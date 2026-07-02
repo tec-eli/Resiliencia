@@ -5,6 +5,7 @@ import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
 import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,6 +171,7 @@ public final class Policy<T> implements Resilient<T> {
     public T call(Operation<T> operation) throws ResilienciaException {
         return switch (outcome(operation)) {
             case Outcome.Success<T>(T value) -> value;
+            case Outcome.TimedOut<T>(var timeout) -> throw new ResilienciaTimeoutException(timeout);
             case Outcome.Failure<T>(ResilienciaException cause) -> throw cause;
             case Outcome.Failure<T>(Throwable cause) -> throw new ResilienciaException("Policy execution failed", cause);
         };
@@ -185,6 +187,8 @@ public final class Policy<T> implements Resilient<T> {
         try {
             var result = chainedOp.execute();
             return new Outcome.Success<>(result);
+        } catch (ResilienciaTimeoutException e) {
+            return new Outcome.TimedOut<>(e.timeout());
         } catch (Exception e) {
             return new Outcome.Failure<>(e);
         }

@@ -2,6 +2,8 @@ package io.github.teceli.resiliencia.core.api;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OutcomeTest {
@@ -53,6 +55,7 @@ class OutcomeTest {
         var result = switch (success) {
             case Outcome.Success<?> s -> "value=" + s.value();
             case Outcome.Failure<?> f -> "cause=" + f.cause().getMessage();
+            case Outcome.TimedOut<?> t -> "timeout=" + t.timeout();
         };
 
         assertThat(result).isEqualTo("value=42");
@@ -65,9 +68,43 @@ class OutcomeTest {
         var result = switch (failure) {
             case Outcome.Success<?> s -> "value=" + s.value();
             case Outcome.Failure<?> f -> "cause=" + f.cause().getMessage();
+            case Outcome.TimedOut<?> t -> "timeout=" + t.timeout();
         };
 
         assertThat(result).isEqualTo("cause=bad state");
+    }
+
+    @Test
+    void should_holdTimeout_when_timedOut() {
+        Outcome<String> outcome = new Outcome.TimedOut<>(Duration.ofMillis(50));
+
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.TimedOut.class, t ->
+                        assertThat(t.timeout()).isEqualTo(Duration.ofMillis(50)));
+    }
+
+    @Test
+    void should_applyOnFailureFunctionWithTimeoutException_when_folding_aTimedOut() {
+        Outcome<String> outcome = new Outcome.TimedOut<>(Duration.ofSeconds(2));
+
+        var result = outcome.fold(
+                value -> "success: " + value,
+                cause -> "failure: " + cause.getClass().getSimpleName());
+
+        assertThat(result).isEqualTo("failure: ResilienciaTimeoutException");
+    }
+
+    @Test
+    void should_matchTimedOut_when_usingSwitchExpression() {
+        Outcome<Integer> timedOut = new Outcome.TimedOut<>(Duration.ofMillis(100));
+
+        var result = switch (timedOut) {
+            case Outcome.Success<?> s -> "value=" + s.value();
+            case Outcome.Failure<?> f -> "cause=" + f.cause().getMessage();
+            case Outcome.TimedOut<?> t -> "timeout=" + t.timeout();
+        };
+
+        assertThat(result).isEqualTo("timeout=" + Duration.ofMillis(100));
     }
 
     @Test
