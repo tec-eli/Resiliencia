@@ -7,6 +7,8 @@ import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                         Predicate<Throwable> shouldRetry, List<ResilienceEvent.Listener> listeners, Clock clock)
         implements Resilient<T> {
 
+    private static final Logger log = LoggerFactory.getLogger(Retry.class);
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
     private static final long DEFAULT_INITIAL_DELAY_MS = 100;
     private static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
@@ -156,7 +159,11 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
                 if (attempt < maxAttempts && shouldRetry.test(e)) {
-                    sleep(Math.min(applyJitter(delayMs), maxDelayMs));
+                    try {
+                        sleep(Math.min(applyJitter(delayMs), maxDelayMs));
+                    } catch (ResilienciaException interrupted) {
+                        return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt);
+                    }
                     delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
                 } else if (attempt == maxAttempts) {
                     emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
@@ -180,7 +187,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         if (bound <= 0) {
             return delayMs;
         }
-        // Avoid overflow if delaysMs is extreme and jitterFactor = 1.0 (bound + 1 o delayMs + bound se pasarían de Long.MAX_VALUE).
+        // Avoid overflow if delaysMs is extreme and jitterFactor = 1.0 (bound + 1 o delayMs + would be greater than Long.MAX_VALUE).
         bound = Math.min(bound, Long.MAX_VALUE - delayMs);
         return delayMs + ThreadLocalRandom.current().nextLong(-bound, bound + 1);
     }
@@ -194,9 +201,14 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         }
     }
 
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
     private void emit(RetryEvent event) {
         for (var listener : listeners) {
-            listener.onEvent(event);
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
+            }
         }
     }
 }

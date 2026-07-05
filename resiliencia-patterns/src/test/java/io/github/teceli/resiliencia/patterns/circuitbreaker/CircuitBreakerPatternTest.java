@@ -415,6 +415,32 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_returnOperationResult_when_listenerThrowsException() {
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withListener(event -> {
+                    throw new IllegalStateException("listener boom");
+                });
+
+        assertThat(circuitBreaker.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
+    void should_resolveHalfOpenPermitAndReopenCircuit_when_testCallThrowsError() {
+        var clock = new ManualClock();
+        var circuitBreaker = openedCircuitBreaker(clock);
+        clock.advance(WAIT_DURATION);
+
+        assertThatExceptionOfType(TestError.class)
+                .isThrownBy(() -> circuitBreaker.outcome(() -> {
+                    throw new TestError();
+                }));
+
+        // The permit consumed by the Error's test call was resolved instead of leaking: the
+        // circuit reopens, exactly as it would for a normal failed test call.
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Open.class);
+    }
+
+    @Test
     void should_reportCircuitBreakerKind_when_patternKindQueried() {
         assertThat(CircuitBreaker.<String>of("test").patternKind()).isEqualTo(PatternKind.CIRCUIT_BREAKER);
         assertThat(CircuitBreaker.<String>of("test").patternName()).isEqualTo("circuit-breaker");
@@ -599,6 +625,8 @@ class CircuitBreakerPatternTest {
     private static String boom() {
         throw new IllegalStateException("boom");
     }
+
+    private static final class TestError extends Error {}
 
     private static void awaitQuietly(CountDownLatch latch) {
         try {

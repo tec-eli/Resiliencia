@@ -46,13 +46,13 @@ public final class Policy<T> implements Resilient<T> {
                     "Retry wraps CircuitBreaker: the retry loop would burn its attempt budget against an "
                             + "already-open circuit, which fails fast on every attempt — no legitimate use case",
                     "Compose CircuitBreaker before Retry so the circuit is checked outside the retry loop, "
-                            + "e.g. Policy.compose(circuitBreaker).and(retry), or use Policy.useDefault(...)"),
+                            + "e.g. Policy.compose(circuitBreaker).and(retry), or use Policy.useOptimumOrder(...)"),
             new OrderingRule(PatternKind.TIMEOUT, PatternKind.RETRY, OrderingRule.Severity.WARN,
                     "Timeout wraps Retry: this ordering is valid for a per-attempt timeout, which is what the "
                             + "library implements today, but may be a mistake if an overall deadline across the "
                             + "whole retry loop was intended instead (not modeled yet)",
                     "If a per-attempt timeout was intended, prefer composing Retry before Timeout, "
-                            + "e.g. Policy.compose(retry).and(timeout), or use Policy.useDefault(...)"));
+                            + "e.g. Policy.compose(retry).and(timeout), or use Policy.useOptimumOrder(...)"));
 
     private final List<Resilient<T>> patterns;
 
@@ -106,7 +106,7 @@ public final class Policy<T> implements Resilient<T> {
         if (patterns.length == 0) {
             throw new InvalidPolicyException(
                     "Policy must have at least one pattern",
-                    "Call Policy.useDefault(patterns) with at least one Resilient pattern");
+                    "Call Policy.useOptimumOrder(patterns) with at least one Resilient pattern");
         }
         var sorted = new ArrayList<Resilient<T>>(patterns.length);
         for (var pattern : patterns) {

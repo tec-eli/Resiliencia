@@ -2,6 +2,7 @@ package io.github.teceli.resiliencia.patterns.retry;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
+import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import org.junit.jupiter.api.Test;
 
@@ -222,6 +223,32 @@ class RetryPatternTest {
                 .isThrownBy(() -> Retry.<String>create().withMaxDelay(-1));
     }
 
+    @Test
+    void should_returnOperationResult_when_listenerThrowsException() {
+        var retry = Retry.<String>create()
+                .withListener(event -> {
+                    throw new IllegalStateException("listener boom");
+                });
+
+        assertThat(retry.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
+    void should_returnFailureOutcome_when_interruptedDuringBackoff() {
+        var retry = Retry.<String>create()
+                .withMaxAttempts(3)
+                .withInitialDelay(10)
+                .withClock(new InterruptingClock());
+
+        var outcome = retry.outcome(() -> {
+            throw new RuntimeException("Always fails");
+        });
+
+        assertThat(outcome).isInstanceOfSatisfying(Outcome.Failure.class, f ->
+                assertThat(f.cause()).isInstanceOf(ResilienciaException.class));
+        assertThat(Thread.interrupted()).isTrue();
+    }
+
     /**
      * Deterministic clock recording each requested sleep instead of blocking, so backoff
      * math can be asserted exactly and instantly.
@@ -239,6 +266,21 @@ class RetryPatternTest {
         public synchronized void sleep(long millis) {
             sleeps.add(millis);
             now = now.plusMillis(millis);
+        }
+    }
+
+    /**
+     * Simulates a thread interrupt arriving during backoff, without actually blocking the test.
+     */
+    private static final class InterruptingClock implements Clock {
+        @Override
+        public Instant instant() {
+            return Instant.parse("2026-01-01T00:00:00Z");
+        }
+
+        @Override
+        public void sleep(long millis) throws InterruptedException {
+            throw new InterruptedException("Simulated interrupt during backoff");
         }
     }
 }

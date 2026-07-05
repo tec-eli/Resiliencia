@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /**
- * Unit tests for Policy pattern order validation and Policy.useDefault order resolution.
+ * Unit tests for Policy pattern order validation and Policy.useOptimumOrder order resolution.
  * Uses fake patterns per kind — the real Timeout/CircuitBreaker/Bulkhead/RateLimiter
  * patterns don't exist yet; the guardrail only depends on {@link Resilient#patternKind()}.
  */

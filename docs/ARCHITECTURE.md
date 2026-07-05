@@ -108,3 +108,29 @@ core and patterns transitively.
 OTel even if unused — classpath bloat and version-conflict risk); independently-versioned modules (adds release
 complexity with no clear benefit at this stage; can be revisited if integration modules end up needing a different
 lifecycle than core).
+
+---
+
+## Error handling: `Error` is never treated as a business outcome
+
+Patterns catch `Exception`, never `Error`. A `java.lang.Error` (`OutOfMemoryError`, `StackOverflowError`, etc.)
+signals a condition the JVM itself may not recover from — it is not a result a caller should receive back through
+`Outcome.Failure` or retry/filter logic, and library code must not pretend otherwise. This matches resilience4j's
+behavior and is deliberate, not an oversight.
+
+Concretely, across `resiliencia-patterns`:
+
+- `Retry`, `Bulkhead`, `RateLimiter`, `CircuitBreaker` only catch `Exception` in their `outcome()` implementation;
+  an `Error` thrown by the operation propagates uncaught, on the calling thread.
+- `Timeout` runs the operation on a virtual thread, so it must catch `Error` there to observe it at all — but still
+  never wraps it into `Outcome`; it stores the `Error` and rethrows it unchanged on the caller's thread once the
+  worker finishes (see `Timeout.outcome()`).
+- `CircuitBreaker` additionally must resolve any HalfOpen test-call permit an `Error` consumed (a one-shot budget
+  counter, not a releasable semaphore) — it catches `Error` solely to call `recordOutcome(true, ...)` before
+  rethrowing, so the circuit can still transition out of HalfOpen. This is bookkeeping, not error swallowing: the
+  `Error` is never turned into an `Outcome.Failure`, and no other pattern needs an equivalent because none of them
+  hold state that an unresolved call could leak.
+
+**Rejected alternatives:** wrapping `Error` into `Outcome.Failure` like any other `Throwable` (makes `outcome()`
+falsely "never throw" for conditions the JVM itself is signaling as unrecoverable, and invites callers to retry or
+filter on `Error` types the same way as ordinary exceptions).

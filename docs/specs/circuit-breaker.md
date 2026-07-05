@@ -51,6 +51,10 @@ takes precedence — an exception matched by both is ignored.
 A result predicate (`recordOnResult`) can also record a failure based on the return value, even if no exception was 
 thrown.
 
+`Error` is never matched by `recordOn`/`ignoreOn` — it isn't a business failure. See "Error handling" in
+`docs/ARCHITECTURE.md` for the library-wide convention. In HalfOpen, an `Error` still resolves the consumed test-call
+permit (counted as a failed test call) before propagating, so it cannot leak the HalfOpen budget.
+
 ---
 
 ## Configuration surface

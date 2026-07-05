@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -149,16 +150,43 @@ class TimeoutPatternTest {
 
     @Test
     void should_emitTimedOutEvent_when_deadlinePasses() {
-        var events = new ArrayList<TimeoutEvent>();
+        // Synchronized: the abandoned worker may append its own Abandoned* event concurrently,
+        // asynchronously with respect to this thread, once it reacts to the interrupt.
+        var events = Collections.synchronizedList(new ArrayList<TimeoutEvent>());
         var timeout = Timeout.<String>of(SHORT_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
 
         timeout.outcome(TimeoutPatternTest::blockUntilInterrupted);
 
         assertThat(events)
+                .filteredOn(TimeoutEvent.TimedOut.class::isInstance)
                 .singleElement()
                 .isInstanceOfSatisfying(TimeoutEvent.TimedOut.class, t ->
                         assertThat(t.timeout()).isEqualTo(SHORT_TIMEOUT));
+    }
+
+    @Test
+    void should_emitAbandonedWorkerFailedEvent_when_interruptedWorkerEventuallyThrows() throws InterruptedException {
+        var events = Collections.synchronizedList(new ArrayList<TimeoutEvent>());
+        var workerDone = new CountDownLatch(1);
+        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+                .withListener(event -> {
+                    events.add((TimeoutEvent) event);
+                    if (event instanceof TimeoutEvent.AbandonedWorkerFailed) {
+                        workerDone.countDown();
+                    }
+                });
+
+        timeout.outcome(TimeoutPatternTest::blockUntilInterrupted);
+
+        assertThat(workerDone.await(5, TimeUnit.SECONDS))
+                .as("abandoned worker should eventually react to the interrupt and emit its event")
+                .isTrue();
+        assertThat(events)
+                .filteredOn(TimeoutEvent.AbandonedWorkerFailed.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(TimeoutEvent.AbandonedWorkerFailed.class, f ->
+                        assertThat(f.cause()).isInstanceOf(ResilienciaException.class));
     }
 
     @Test
@@ -176,6 +204,16 @@ class TimeoutPatternTest {
                 .singleElement()
                 .isInstanceOfSatisfying(TimeoutEvent.Failed.class, f ->
                         assertThat(f.error()).isSameAs(boom));
+    }
+
+    @Test
+    void should_returnOperationResult_when_listenerThrowsException() {
+        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+                .withListener(event -> {
+                    throw new IllegalStateException("listener boom");
+                });
+
+        assertThat(timeout.call(() -> "done")).isEqualTo("done");
     }
 
     @Test

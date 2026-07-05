@@ -33,6 +33,10 @@ the operation holds resources that must be released cleanly.
 - **TimedOut** — the operation exceeded the limit. Carries: configured limit, actual elapsed time.
 - **Succeeded** — the operation completed within the limit. Carries: elapsed time.
 - **Failed** — the operation threw before the timeout elapsed. Carries: the thrown exception.
+- **AbandonedWorkerSucceeded** — a worker abandoned after `TimedOut` eventually completed successfully. Observability
+  only; the caller already received `Outcome.TimedOut` and does not get this result.
+- **AbandonedWorkerFailed** — a worker abandoned after `TimedOut` eventually threw. Carries: the thrown cause.
+  Observability only, same as above.
 
 ---
 

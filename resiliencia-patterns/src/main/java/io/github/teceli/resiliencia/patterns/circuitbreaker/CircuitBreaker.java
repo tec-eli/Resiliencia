@@ -7,6 +7,8 @@ import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import io.github.teceli.resiliencia.core.api.Resilient;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +32,8 @@ import java.util.function.Predicate;
  * in the Closed state with an empty window.
  */
 public final class CircuitBreaker<T> implements Resilient<T> {
+
+    private static final Logger log = LoggerFactory.getLogger(CircuitBreaker.class);
 
     private final String name;
     private final double failureRateThreshold;
@@ -275,6 +279,12 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         } catch (Exception e) {
             recordOutcome(isFailure(e), start);
             return new Outcome.Failure<>(e);
+        } catch (Error e) {
+            // Not wrapped into Outcome, consistent with Timeout: an Error is not a business
+            // outcome. Still recorded as a failed test call so a HalfOpen permit consumed
+            // above is resolved instead of leaking the circuit's HalfOpen budget forever.
+            recordOutcome(true, start);
+            throw e;
         }
     }
 
@@ -331,7 +341,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     private void recordOutcome(boolean failed, Instant start) {
         var elapsed = Duration.between(start, clock.instant());
         var slow = slowCallDurationThreshold != null && elapsed.compareTo(slowCallDurationThreshold) > 0;
-        window.record(failed, slow);
+        window.observe(failed, slow);
         emit(new CircuitBreakerEvent.CallRecorded(clock.instant(), name, !failed, elapsed, window.failureRate()));
 
         var slot = current.get();
@@ -390,16 +400,21 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         }
     }
 
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
     private void emit(CircuitBreakerEvent event) {
         for (var listener : listeners) {
-            listener.onEvent(event);
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
+            }
         }
     }
 
     /**
-     * Fixed-size ring buffer recording whether each of the last {@code capacity} calls was a
+     * Fixed-size ring buffer observing whether each of the last {@code capacity} calls was a
      * failure and/or slow, used to compute the failure and slow-call rates. Synchronized
-     * because calls may be recorded concurrently from multiple threads.
+     * because calls may be observed concurrently from multiple threads.
      */
     private static final class SlidingWindow {
         private final boolean[] failures;
@@ -414,7 +429,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             this.slowCalls = new boolean[capacity];
         }
 
-        synchronized void record(boolean isFailure, boolean isSlow) {
+        synchronized void observe(boolean isFailure, boolean isSlow) {
             failures[writeIndex] = isFailure;
             slowCalls[writeIndex] = isSlow;
             writeIndex = (writeIndex + 1) % capacity;

@@ -7,11 +7,14 @@ import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -31,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<ResilienceEvent.Listener> listeners,
                           Clock clock) implements Resilient<T> {
 
+    private static final Logger log = LoggerFactory.getLogger(Timeout.class);
     private static final boolean DEFAULT_CANCEL_ON_TIMEOUT = true;
 
     public Timeout {
@@ -104,15 +108,19 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
         var start = clock.instant();
         var result = new AtomicReference<Outcome<T>>();
         var error = new AtomicReference<Error>();
+        var timedOut = new AtomicBoolean(false);
         var worker = Thread.ofVirtual().name("resiliencia-timeout").start(() -> {
             try {
                 result.set(new Outcome.Success<>(operation.execute()));
+                emitAbandonedSuccess(timedOut.get());
             } catch (Exception e) {
                 result.set(new Outcome.Failure<>(e));
+                emitAbandonedFailure(timedOut.get(), e);
             } catch (Error e) {
                 // Do not wrap into Outcome: rethrown as-is on the caller's thread below,
                 // once join() confirms the worker has finished.
                 error.set(e);
+                emitAbandonedFailure(timedOut.get(), e);
             }
         });
 
@@ -127,6 +135,7 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
         }
 
         if (!finished) {
+            timedOut.set(true);
             if (cancelOnTimeout) {
                 worker.interrupt();
             }
@@ -144,14 +153,37 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
             case Outcome.Success<T> success ->
                     emit(new TimeoutEvent.Succeeded(clock.instant(), Duration.between(start, clock.instant())));
             case Outcome.Failure<T> failure -> emit(new TimeoutEvent.Failed(clock.instant(), failure.cause()));
-            case Outcome.TimedOut<T> timedOut -> { /* never produced by the worker */ }
+            case Outcome.TimedOut<T> ignored -> { /* never produced by the worker */ }
         }
         return outcome;
     }
 
+    /**
+     * Emits {@code AbandonedWorkerSucceeded}, but only once the deadline has already passed —
+     * otherwise the worker is still within budget and the caller's own path (once {@code join()}
+     * confirms completion) emits the normal {@code Succeeded} event instead.
+     */
+    private void emitAbandonedSuccess(boolean timedOut) {
+        if (timedOut) {
+            emit(new TimeoutEvent.AbandonedWorkerSucceeded(clock.instant()));
+        }
+    }
+
+    /** Same as {@link #emitAbandonedSuccess}, for a worker that threw instead. */
+    private void emitAbandonedFailure(boolean timedOut, Throwable cause) {
+        if (timedOut) {
+            emit(new TimeoutEvent.AbandonedWorkerFailed(clock.instant(), cause));
+        }
+    }
+
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
     private void emit(TimeoutEvent event) {
         for (var listener : listeners) {
-            listener.onEvent(event);
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
+            }
         }
     }
 }

@@ -19,4 +19,10 @@ public sealed interface TimeoutEvent extends ResilienceEvent {
     record Failed(Instant timestamp, Throwable error) implements TimeoutEvent {}
 
     record TimedOut(Instant timestamp, Duration timeout) implements TimeoutEvent {}
+
+    /** The abandoned worker (interrupted or left running past the timeout) eventually succeeded. */
+    record AbandonedWorkerSucceeded(Instant timestamp) implements TimeoutEvent {}
+
+    /** The abandoned worker (interrupted or left running past the timeout) eventually failed. */
+    record AbandonedWorkerFailed(Instant timestamp, Throwable cause) implements TimeoutEvent {}
 }
