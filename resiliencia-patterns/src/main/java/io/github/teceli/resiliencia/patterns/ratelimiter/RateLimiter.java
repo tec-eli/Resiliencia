@@ -7,6 +7,8 @@ import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,6 +31,9 @@ import java.util.Objects;
  * {@code withX} method returns a new, independent RateLimiter with a fresh window.
  */
 public final class RateLimiter<T> implements Resilient<T> {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimiter.class);
+    private static final Duration MAX_MILLIS_DURATION = Duration.ofMillis(Long.MAX_VALUE);
 
     private final int limit;
     private final Duration period;
@@ -181,7 +186,11 @@ public final class RateLimiter<T> implements Resilient<T> {
             if (clock.instant().plus(untilWindowEnd).isAfter(deadline)) {
                 return AcquireOutcome.rejected(untilWindowEnd);
             }
-            clock.sleep(Math.max(1, untilWindowEnd.toMillis()));
+            // Duration.toMillis() throws ArithmeticException on overflow for extreme values;
+            // clamp to Long.MAX_VALUE instead of letting that escape.
+            var untilWindowEndMillis =
+                    untilWindowEnd.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : untilWindowEnd.toMillis();
+            clock.sleep(Math.max(1, untilWindowEndMillis));
         }
     }
 
@@ -212,9 +221,14 @@ public final class RateLimiter<T> implements Resilient<T> {
         }
     }
 
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
     private void emit(RateLimiterEvent event) {
         for (var listener : listeners) {
-            listener.onEvent(event);
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
+            }
         }
     }
 }

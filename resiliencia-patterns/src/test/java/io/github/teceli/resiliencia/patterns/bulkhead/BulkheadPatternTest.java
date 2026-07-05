@@ -190,6 +190,16 @@ class BulkheadPatternTest {
     }
 
     @Test
+    void should_returnOperationResult_when_listenerThrowsException() {
+        var bulkhead = Bulkhead.<String>of(1)
+                .withListener(event -> {
+                    throw new IllegalStateException("listener boom");
+                });
+
+        assertThat(bulkhead.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
     void should_reportBulkheadKind_when_patternKindQueried() {
         assertThat(Bulkhead.<String>of(1).patternKind()).isEqualTo(PatternKind.BULKHEAD);
         assertThat(Bulkhead.<String>of(1).patternName()).isEqualTo("bulkhead");

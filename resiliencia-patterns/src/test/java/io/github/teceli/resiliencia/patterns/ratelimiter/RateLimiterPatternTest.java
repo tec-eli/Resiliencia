@@ -175,6 +175,17 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_returnOperationResult_when_listenerThrowsException() {
+        var limiter = RateLimiter.<String>of(1, PERIOD)
+                .withClock(new ManualClock())
+                .withListener(event -> {
+                    throw new IllegalStateException("listener boom");
+                });
+
+        assertThat(limiter.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
     void should_reportRateLimiterKind_when_patternKindQueried() {
         var limiter = RateLimiter.<String>of(1, PERIOD);
 

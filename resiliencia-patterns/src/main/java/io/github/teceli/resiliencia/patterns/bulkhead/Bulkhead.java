@@ -7,6 +7,8 @@ import io.github.teceli.resiliencia.core.api.ResilienciaException;
 import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,6 +29,9 @@ import java.util.concurrent.TimeUnit;
  * independent Bulkhead with a fresh, unused set of permits.
  */
 public final class Bulkhead<T> implements Resilient<T> {
+
+    private static final Logger log = LoggerFactory.getLogger(Bulkhead.class);
+    private static final Duration MAX_MILLIS_DURATION = Duration.ofMillis(Long.MAX_VALUE);
 
     private final int maxConcurrentCalls;
     private final Duration maxWait;
@@ -121,7 +126,10 @@ public final class Bulkhead<T> implements Resilient<T> {
     public Outcome<T> outcome(Operation<T> operation) {
         boolean acquired;
         try {
-            acquired = permits.tryAcquire(maxWait.toMillis(), TimeUnit.MILLISECONDS);
+            // Duration.toMillis() throws ArithmeticException on overflow for extreme values;
+            // clamp to Long.MAX_VALUE instead of letting that escape.
+            var maxWaitMillis = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : maxWait.toMillis();
+            acquired = permits.tryAcquire(maxWaitMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new Outcome.Failure<>(
@@ -153,9 +161,14 @@ public final class Bulkhead<T> implements Resilient<T> {
         return maxConcurrentCalls - permits.availablePermits();
     }
 
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
     private void emit(BulkheadEvent event) {
         for (var listener : listeners) {
-            listener.onEvent(event);
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
+            }
         }
     }
 }
