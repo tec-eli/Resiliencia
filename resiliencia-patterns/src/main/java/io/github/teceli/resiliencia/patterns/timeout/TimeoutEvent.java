@@ -14,7 +14,7 @@ public sealed interface TimeoutEvent extends ResilienceEvent {
         return "timeout";
     }
 
-    record Success(Instant timestamp, Duration elapsed) implements TimeoutEvent {}
+    record Succeeded(Instant timestamp, Duration elapsed) implements TimeoutEvent {}
 
     record Failed(Instant timestamp, Throwable error) implements TimeoutEvent {}
 

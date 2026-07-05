@@ -8,7 +8,11 @@ Retries a failed operation a configurable number of times with optional waiting 
 
 On each failure, Retry checks `shouldRetry` — a single `Predicate<Throwable>` — to decide whether the exception is
 eligible for retry. If it is, and attempts remains, it waits (the delay grows by `backoffMultiplier` after each
-attempt) and tries again. If the operation succeeds on any attempt, the result is returned normally. If all attempts
+attempt) and tries again. Two optional backoff modifiers harden this against real-world failure storms:
+`jitterFactor` shifts each delay uniformly within `[delay * (1 - f), delay * (1 + f)]` so clients that failed
+together don't retry together (thundering herd), and `maxDelayMs` clamps every delay — including the initial one,
+and after jitter is applied — preventing unbounded exponential growth. Neither modifier is validated against the
+other: an initial delay above the cap is clamped, not rejected. If the operation succeeds on any attempt, the result is returned normally. If all attempts
 are exhausted, a `RetryExhaustedException` is thrown carrying the total attempt count and the last exception.
 
 Retry is configured via `Retry.<T>create()` followed by `withX` copy methods (each returns a new, independently
@@ -34,6 +38,8 @@ There is no result-based retry (retrying because the returned value matches a pr
 | `maxAttempts` | no | Total attempts including the first call. Must be >= 1 | 3 |
 | `initialDelayMs` | no | Wait before the first retry, in milliseconds. Must be >= 0 | 100 |
 | `backoffMultiplier` | no | Factor the delay is multiplied by after each attempt. Must be >= 1.0 | 2.0 |
+| `maxDelayMs` | no | Hard cap on every backoff delay, applied after jitter. Must be >= 0 | uncapped |
+| `jitterFactor` | no | Uniform randomization of each delay within `±factor`. Must be in [0.0, 1.0] | 0.0 (off) |
 | `shouldRetry` | no | Predicate — retry only if it returns true for the thrown exception | `e -> true` |
 | `listeners` | no | `ResilienceEvent.Listener` instances notified of each `RetryEvent` | none |
 

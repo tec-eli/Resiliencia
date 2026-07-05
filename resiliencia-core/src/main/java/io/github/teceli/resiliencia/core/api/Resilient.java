@@ -1,5 +1,6 @@
 package io.github.teceli.resiliencia.core.api;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -15,21 +16,38 @@ public interface Resilient<T> {
 
     /**
      * Execute an operation and capture the result or failure as an Outcome.
-     * Never throws an exception — always returns Success, Failure, or a pattern-specific outcome.
+     * Never throws for a recorded {@code Exception} — always returns Success, Failure, or a
+     * pattern-specific outcome. An {@code Error} thrown by the operation propagates uncaught
+     * instead of being captured as a Failure: fatal JVM conditions (e.g. {@code OutOfMemoryError})
+     * should not be treated as a recoverable result.
      */
     Outcome<T> outcome(Operation<T> operation);
 
     /**
-     * Execute an operation asynchronously and return a handle to its result.
+     * Execute an operation asynchronously on a new virtual thread and return a handle to its
+     * result. The future completes with the value of {@link #call}, or exceptionally with
+     * whatever {@link #call} throws.
      *
-     * TODO: not yet implemented. Intended to run on a virtual thread
-     * "Virtual threads as the foundation") and to integrate with structured concurrency
-     * once Timeout/Bulkhead/RateLimiter exist, so cancellation composes correctly across
-     * a Policy chain. Implement once those patterns land; until then callers must use
-     * call()/outcome() from the calling thread.
+     * Cancelling the returned future interrupts the virtual thread, so cancellation propagates
+     * through whichever pattern is currently blocking — a Timeout wait, a Retry backoff, a
+     * Bulkhead or RateLimiter permit wait — including across a full Policy chain.
      */
     default CompletableFuture<T> callAsync(Operation<T> operation) {
-        throw new UnsupportedOperationException("callAsync is not yet implemented; see TODO in Resilient");
+        Objects.requireNonNull(operation, "operation must not be null");
+        var future = new CompletableFuture<T>();
+        var worker = Thread.ofVirtual().name("resiliencia-async").start(() -> {
+            try {
+                future.complete(call(operation));
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        future.whenComplete((result, error) -> {
+            if (future.isCancelled()) {
+                worker.interrupt();
+            }
+        });
+        return future;
     }
 
     /**

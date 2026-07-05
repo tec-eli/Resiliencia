@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /**
  * Unit tests for the Timeout pattern: virtual-thread execution, interruption on deadline,
@@ -65,6 +66,38 @@ class TimeoutPatternTest {
     }
 
     @Test
+    void should_defaultCancelOnTimeoutToTrue_when_constructed() {
+        assertThat(Timeout.<String>of(GENEROUS_TIMEOUT).cancelOnTimeout()).isTrue();
+    }
+
+    @Test
+    void should_notInterruptOperation_when_cancelOnTimeoutIsFalse() throws Exception {
+        var interrupted = new CountDownLatch(1);
+        var completedNaturally = new CountDownLatch(1);
+        var timeout = Timeout.<String>of(SHORT_TIMEOUT).withCancelOnTimeout(false);
+
+        assertThatExceptionOfType(ResilienciaTimeoutException.class)
+                .isThrownBy(() -> timeout.call(() -> {
+                    try {
+                        Thread.sleep(Duration.ofMillis(200));
+                        completedNaturally.countDown();
+                        return "finished naturally";
+                    } catch (InterruptedException e) {
+                        interrupted.countDown();
+                        Thread.currentThread().interrupt();
+                        throw new ResilienciaException("interrupted", e);
+                    }
+                }));
+
+        assertThat(completedNaturally.await(5, TimeUnit.SECONDS))
+                .as("operation should be allowed to finish naturally when cancelOnTimeout is false")
+                .isTrue();
+        assertThat(interrupted.getCount())
+                .as("worker thread should never have been interrupted")
+                .isEqualTo(1);
+    }
+
+    @Test
     void should_returnTimedOutOutcome_when_usingOutcomeMethod() {
         var timeout = Timeout.<String>of(SHORT_TIMEOUT);
 
@@ -102,7 +135,7 @@ class TimeoutPatternTest {
     }
 
     @Test
-    void should_emitSuccessEvent_when_operationCompletesWithinTimeout() {
+    void should_emitSucceededEvent_when_operationCompletesWithinTimeout() {
         var events = new ArrayList<TimeoutEvent>();
         var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
@@ -111,7 +144,7 @@ class TimeoutPatternTest {
 
         assertThat(events)
                 .singleElement()
-                .isInstanceOf(TimeoutEvent.Success.class);
+                .isInstanceOf(TimeoutEvent.Succeeded.class);
     }
 
     @Test
@@ -159,10 +192,10 @@ class TimeoutPatternTest {
 
     @Test
     void should_throwIllegalArgumentException_when_timeoutIsNotPositive() {
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Timeout.<String>of(Duration.ZERO));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Timeout.<String>of(Duration.ofMillis(-1)));
+         assertThatIllegalArgumentException()
+            .isThrownBy(() -> Timeout.<String>of(Duration.ZERO));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Timeout.<String>of(Duration.ofMillis(-1)));
     }
 
     @Test
@@ -174,6 +207,17 @@ class TimeoutPatternTest {
         assertThat(reconfigured).isNotSameAs(original);
         assertThat(original.timeout()).isEqualTo(SHORT_TIMEOUT);
         assertThat(reconfigured.timeout()).isEqualTo(GENEROUS_TIMEOUT);
+    }
+
+    @Test
+    void should_returnNewInstanceWithCancelOnTimeoutFalse_when_witherCalled() {
+        var original = Timeout.<String>of(SHORT_TIMEOUT);
+
+        var reconfigured = original.withCancelOnTimeout(false);
+
+        assertThat(reconfigured).isNotSameAs(original);
+        assertThat(original.cancelOnTimeout()).isTrue();
+        assertThat(reconfigured.cancelOnTimeout()).isFalse();
     }
 
     /**

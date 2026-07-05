@@ -14,6 +14,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 /**
  * Unit tests for the Bulkhead pattern: concurrency limiting, fail-fast and bounded-wait
@@ -138,8 +140,39 @@ class BulkheadPatternTest {
         bulkhead.call(() -> "done");
 
         assertThat(events).hasSize(2);
-        assertThat(events.get(0)).isInstanceOf(BulkheadEvent.Permitted.class);
-        assertThat(events.get(1)).isInstanceOf(BulkheadEvent.Finished.class);
+        assertThat(events.get(0)).isInstanceOfSatisfying(BulkheadEvent.Permitted.class,
+                p -> assertThat(p.activeCalls()).isEqualTo(1));
+        assertThat(events.get(1)).isInstanceOfSatisfying(BulkheadEvent.Finished.class,
+                f -> assertThat(f.activeCalls()).isZero());
+    }
+
+    @Test
+    void should_reportActiveCallCount_when_secondCallOverlapsFirst() throws Exception {
+        var events = new ArrayList<BulkheadEvent>();
+        var bulkhead = Bulkhead.<String>of(2)
+                .withListener(event -> events.add((BulkheadEvent) event));
+        var firstInside = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+
+        var first = Thread.ofVirtual().start(() -> bulkhead.call(() -> {
+            firstInside.countDown();
+            awaitQuietly(releaseFirst);
+            return "first";
+        }));
+        assertThat(firstInside.await(5, TimeUnit.SECONDS)).isTrue();
+
+        bulkhead.call(() -> "second");
+
+        releaseFirst.countDown();
+        first.join(Duration.ofSeconds(5));
+
+        var permitted = events.stream()
+                .filter(BulkheadEvent.Permitted.class::isInstance)
+                .map(BulkheadEvent.Permitted.class::cast)
+                .toList();
+        assertThat(permitted).hasSize(2);
+        assertThat(permitted.get(0).activeCalls()).isEqualTo(1);
+        assertThat(permitted.get(1).activeCalls()).isEqualTo(2);
     }
 
     @Test
@@ -166,10 +199,10 @@ class BulkheadPatternTest {
     void should_throwIllegalArgumentException_when_configurationInvalid() {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> Bulkhead.<String>of(0));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(Duration.ofMillis(-1)));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(null));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(Duration.ofMillis(-1)));
+        assertThatNullPointerException()
+            .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(null));
     }
 
     @Test

@@ -32,6 +32,7 @@ the operation holds resources that must be released cleanly.
 
 - **TimedOut** — the operation exceeded the limit. Carries: configured limit, actual elapsed time.
 - **Succeeded** — the operation completed within the limit. Carries: elapsed time.
+- **Failed** — the operation threw before the timeout elapsed. Carries: the thrown exception.
 
 ---
 

@@ -1,6 +1,7 @@
 module io.github.teceli.resiliencia.test {
-    requires io.github.teceli.resiliencia.core;
-    requires io.github.teceli.resiliencia.patterns;
+    requires transitive io.github.teceli.resiliencia.core;
     requires org.junit.jupiter.api;
-    requires org.assertj.core;
+    requires transitive org.assertj.core;
+
+    exports io.github.teceli.resiliencia.test;
 }

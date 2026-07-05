@@ -1,4 +1,6 @@
-package io.github.teceli.resiliencia.core.api;
+package io.github.teceli.resiliencia.compose;
+
+import io.github.teceli.resiliencia.core.api.ResilienciaException;
 
 import java.io.Serial;
 

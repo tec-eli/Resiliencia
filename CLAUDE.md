@@ -6,10 +6,10 @@
 this repository. Follow these conventions consistently. Do not refactor existing code or suggest architectural
 changes unless explicitly requested.
 
-**Source of truth for behavior and design decisions:** `specs/*.md` (one file per concept — core, retry, timeout,
-circuit-breaker, bulkhead, rate-limiter, policy) and `architecture.md` (cross-cutting decisions: virtual threads,
+**Source of truth for behavior and design decisions:** `docs/specs/*.md` (one file per concept — core, retry, timeout,
+circuit-breaker, bulkhead, rate-limiter, policy) and `docs/ARCHITECTURE.md` (cross-cutting decisions: virtual threads,
 module system, jcstress, module strategy, no global registry). Both are living documents — if this file and a spec
-ever disagree, the spec wins.
+ever disagree, the spec wins. The project is on a early stage so this can be changed if there is a better approach.
 
 ### Handling spec gaps
 
@@ -57,7 +57,7 @@ open-ended one. Do not proceed with an assumption on unresolved design questions
 
 **resiliencia** is a multi-module Maven project organized by concerns, not layers. Each Maven module has its own
 `module-info.java` enforcing encapsulation at compile time. Full rationale for all of the below lives in
-`architecture.md`.
+`docs/ARCHITECTURE.md`.
 
 ### Module structure
 
@@ -76,24 +76,6 @@ resiliencia/
 ├── resiliencia-stress/            ← jcstress concurrency tests (not published)
 └── resiliencia-examples/          ← Usage examples (not published)
 ```
-
-### Module boundaries
-
-**Core principle:** no lower-level module knows about higher-level ones. Users add only the modules they need.
-
-| Layer | Exports | Cannot depend on |
-|---|---|---|
-| `api/` | Public types (Resilient, Outcome, exceptions) | Nothing (foundation) |
-| `spi/` | Extension points (listeners, metrics, state stores) | Only `api/` |
-| `internal/` | Package-private; NOT exported in `module-info.java` | Implementation details, free to change |
-
-Cross-module rules:
-- One module never imports `internal/` from another module — the compiler enforces this via `module-info.java`
-- One module never imports `api/` from another module's internals — use the published API only
-- Communication between modules goes through published `api/` or `spi/` types, never through `internal/`
-
-**Important:** Tests may need `--add-opens` to access package-private internals for unit testing, but production
-code must never do this.
 
 ### Design principles
 
@@ -139,7 +121,7 @@ not just adjacent):
   footgun if the user wanted an overall retry-loop deadline (not modeled yet).
 
 Use `Resilient<T>.patternKind()` for this kind of internal check, never `instanceof` and never the observability
-`patternName(): String`. See `specs/policy.md` for full rationale before touching this logic.
+`patternName(): String`. See `docs/specs/policy.md` for full rationale before touching this logic.
 
 ---
 

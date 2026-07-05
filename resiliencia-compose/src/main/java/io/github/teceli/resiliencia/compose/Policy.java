@@ -1,6 +1,5 @@
 package io.github.teceli.resiliencia.compose;
 
-import io.github.teceli.resiliencia.core.api.InvalidPolicyException;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
@@ -26,6 +25,7 @@ import java.util.Objects;
  */
 public final class Policy<T> implements Resilient<T> {
     private static final Logger log = LoggerFactory.getLogger(Policy.class);
+    private static final String PATTERN_MUST_NOT_BE_NULL = "Pattern must not be null";
 
     /**
      * A known-bad ordering of two pattern kinds: {@code outer} sitting anywhere further out in
@@ -84,7 +84,7 @@ public final class Policy<T> implements Resilient<T> {
      * @throws InvalidPolicyException if the resulting ordering is known to be broken at runtime
      */
     public Policy<T> and(Resilient<T> pattern) {
-        Objects.requireNonNull(pattern, "pattern must not be null");
+        Objects.requireNonNull(pattern, PATTERN_MUST_NOT_BE_NULL);
         validateOrdering(patterns, pattern);
         var newPatterns = new ArrayList<>(patterns);
         newPatterns.add(pattern);
@@ -101,8 +101,8 @@ public final class Policy<T> implements Resilient<T> {
      * The sort is stable: patterns of the same kind keep the relative order they were passed in.
      */
     @SafeVarargs
-    public static <T> Policy<T> useDefault(Resilient<T>... patterns) {
-        Objects.requireNonNull(patterns, "patterns must not be null");
+    public static <T> Policy<T> useOptimumOrder(Resilient<T>... patterns) {
+        Objects.requireNonNull(patterns, PATTERN_MUST_NOT_BE_NULL);
         if (patterns.length == 0) {
             throw new InvalidPolicyException(
                     "Policy must have at least one pattern",
@@ -110,7 +110,7 @@ public final class Policy<T> implements Resilient<T> {
         }
         var sorted = new ArrayList<Resilient<T>>(patterns.length);
         for (var pattern : patterns) {
-            sorted.add(Objects.requireNonNull(pattern, "pattern must not be null"));
+            sorted.add(Objects.requireNonNull(pattern, PATTERN_MUST_NOT_BE_NULL));
         }
         sorted.sort(Comparator.comparingInt(pattern -> defaultOrderRank(pattern.patternKind())));
 
@@ -144,17 +144,12 @@ public final class Policy<T> implements Resilient<T> {
      */
     private static <T> void validateOrdering(List<Resilient<T>> outerPatterns, Resilient<T> newPattern) {
         for (var rule : ORDERING_RULES) {
-            if (rule.inner() != newPattern.patternKind()) {
-                continue;
-            }
-            var conflict = outerPatterns.stream()
-                    .anyMatch(outer -> outer.patternKind() == rule.outer());
-            if (!conflict) {
-                continue;
-            }
-            switch (rule.severity()) {
-                case ERROR -> throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
-                case WARN -> log.warn("{}. {}.", rule.problem(), rule.suggestedFix());
+            if (rule.inner() == newPattern.patternKind() &&
+                outerPatterns.stream().anyMatch(outer -> outer.patternKind() == rule.outer())) {
+                switch (rule.severity()) {
+                    case ERROR -> throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
+                    case WARN -> log.warn("{}. {}.", rule.problem(), rule.suggestedFix());
+                }
             }
         }
     }

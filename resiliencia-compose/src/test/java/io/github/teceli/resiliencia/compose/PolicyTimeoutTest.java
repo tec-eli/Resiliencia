@@ -8,6 +8,8 @@ import io.github.teceli.resiliencia.patterns.timeout.Timeout;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +75,35 @@ class PolicyTimeoutTest {
                 .withCauseInstanceOf(ResilienciaTimeoutException.class);
 
         assertThat(attempts.get()).isEqualTo(2);
+    }
+
+    @Test
+    void should_interruptOperationThroughChain_when_asyncCallCancelled() throws Exception {
+        var operationStarted = new CountDownLatch(1);
+        var operationInterrupted = new CountDownLatch(1);
+        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10);
+        var timeout = Timeout.<String>of(Duration.ofSeconds(30));
+        var policy = Policy.compose(retry).and(timeout);
+
+        var future = policy.callAsync(() -> {
+            operationStarted.countDown();
+            try {
+                Thread.sleep(Duration.ofSeconds(30));
+                return "never";
+            } catch (InterruptedException e) {
+                operationInterrupted.countDown();
+                Thread.currentThread().interrupt();
+                throw new ResilienciaException("interrupted", e);
+            }
+        });
+        assertThat(operationStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+        future.cancel(true);
+
+        assertThat(operationInterrupted.await(5, TimeUnit.SECONDS))
+                .as("cancellation should interrupt the operation through Retry and Timeout")
+                .isTrue();
+        assertThat(future.isCancelled()).isTrue();
     }
 
     /**

@@ -1,6 +1,5 @@
 package io.github.teceli.resiliencia.compose;
 
-import io.github.teceli.resiliencia.core.api.InvalidPolicyException;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
@@ -84,10 +83,10 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_resolveRecommendedOrder_when_useDefaultReceivesShuffledPatterns() {
+    void should_resolveRecommendedOrder_when_useOptimumOrderReceivesShuffledPatterns() {
         var callOrder = new ArrayList<String>();
 
-        var policy = Policy.useDefault(
+        var policy = Policy.useOptimumOrder(
                 recordingPattern(PatternKind.TIMEOUT, callOrder),
                 recordingPattern(PatternKind.BULKHEAD, callOrder),
                 recordingPattern(PatternKind.RETRY, callOrder),
@@ -105,10 +104,10 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_placeCustomPatternInnermost_when_useDefaultReceivesUnknownKind() {
+    void should_placeCustomPatternInnermost_when_useOptimumOrderReceivesUnknownKind() {
         var callOrder = new ArrayList<String>();
 
-        var policy = Policy.useDefault(
+        var policy = Policy.useOptimumOrder(
                 recordingPattern(PatternKind.CUSTOM, callOrder),
                 recordingPattern(PatternKind.RETRY, callOrder),
                 recordingPattern(PatternKind.RATE_LIMITER, callOrder));
@@ -134,9 +133,9 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_constructWithoutWarnOrException_when_useDefaultResolvesShuffledInput() {
+    void should_constructWithoutWarnOrException_when_useOptimumOrderResolvesShuffledInput() {
         var stderr = captureStdErr(() ->
-                assertThatNoException().isThrownBy(() -> Policy.useDefault(
+                assertThatNoException().isThrownBy(() -> Policy.useOptimumOrder(
                         fakePattern(PatternKind.TIMEOUT),
                         fakePattern(PatternKind.RETRY),
                         fakePattern(PatternKind.CIRCUIT_BREAKER))));
@@ -154,16 +153,16 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_throwInvalidPolicyException_when_useDefaultReceivesNoPatterns() {
+    void should_throwInvalidPolicyException_when_useOptimumOrderReceivesNoPatterns() {
         assertThatExceptionOfType(InvalidPolicyException.class)
-                .isThrownBy(Policy::<String>useDefault)
+                .isThrownBy(Policy::<String>useOptimumOrder)
                 .withMessageContaining("at least one pattern");
     }
 
     @Test
-    void should_throwNullPointerException_when_useDefaultReceivesNullPattern() {
+    void should_throwNullPointerException_when_useOptimumOrderReceivesNullPattern() {
         assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> Policy.useDefault(fakePattern(PatternKind.RETRY), null));
+                .isThrownBy(() -> Policy.useOptimumOrder(fakePattern(PatternKind.RETRY), null));
     }
 
     /**

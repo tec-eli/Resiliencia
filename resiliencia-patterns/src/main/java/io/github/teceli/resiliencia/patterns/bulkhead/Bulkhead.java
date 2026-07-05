@@ -112,7 +112,6 @@ public final class Bulkhead<T> implements Resilient<T> {
             // over the sealed Outcome.
             case Outcome.TimedOut<T>(var timeout) -> throw new ResilienciaTimeoutException(timeout);
             case Outcome.Failure<T>(RuntimeException cause) -> throw cause;
-            case Outcome.Failure<T>(Error cause) -> throw cause;
             case Outcome.Failure<T>(Throwable cause) ->
                     throw new ResilienciaException("Operation failed inside bulkhead", cause);
         };
@@ -134,15 +133,24 @@ public final class Bulkhead<T> implements Resilient<T> {
             return new Outcome.Failure<>(new BulkheadFullException(maxConcurrentCalls, maxWait));
         }
 
-        emit(new BulkheadEvent.Permitted(clock.instant()));
+        emit(new BulkheadEvent.Permitted(clock.instant(), activeCalls()));
         try {
             return new Outcome.Success<>(operation.execute());
-        } catch (Throwable t) {
-            return new Outcome.Failure<>(t);
+        } catch (Exception e) {
+            return new Outcome.Failure<>(e);
         } finally {
             permits.release();
-            emit(new BulkheadEvent.Finished(clock.instant()));
+            emit(new BulkheadEvent.Finished(clock.instant(), activeCalls()));
         }
+    }
+
+    /**
+     * Approximate count of calls currently holding a permit, derived from the semaphore's
+     * available permits. Best-effort under concurrency: another thread may acquire or release
+     * between this read and the event being observed.
+     */
+    private int activeCalls() {
+        return maxConcurrentCalls - permits.availablePermits();
     }
 
     private void emit(BulkheadEvent event) {

@@ -8,6 +8,8 @@
 [![Java](https://img.shields.io/badge/java-21%2B-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.teceli/resiliencia.svg)](https://central.sonatype.com/artifact/io.github.teceli/resiliencia)
 
+**[Website & API docs →](https://tec-eli.github.io/resiliencia/)**
+
 **resiliencia** is not a port of resilience4j. It is a new library that treats Java 21 as a baseline — not a target. 
 Virtual threads are the foundation, not an option. The Java Module System is enforced from the first commit. The API is
 designed around modern Java idioms: sealed interfaces, records, and pattern matching.
