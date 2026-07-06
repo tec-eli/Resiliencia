@@ -71,8 +71,9 @@ class ResilienciaAssertionsTest {
     @Test
     void should_fail_when_timedOutAssertedOnSuccess() {
         Outcome<String> outcome = new Outcome.Success<>("done");
+        var outcomeAssert = assertThat(outcome);
 
         assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> assertThat(outcome).isTimedOut());
+            .isThrownBy(outcomeAssert::isTimedOut);
     }
 }

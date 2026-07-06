@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -489,8 +490,8 @@ class CircuitBreakerPatternTest {
 
     @Test
     void should_throwIllegalArgumentException_when_openStateHasNegativeRemainingWait() {
-        assertThrows(IllegalArgumentException.class, () ->
-            new CircuitState.Open(Instant.now(), Duration.ofMillis(-1)));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new CircuitState.Open(Instant.now(), Duration.ofMillis(-1)));
     }
 
     @Test

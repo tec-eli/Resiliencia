@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -203,12 +205,15 @@ class BulkheadPatternTest {
 
     @Test
     void should_throwIllegalArgumentException_when_configurationInvalid() {
-        assertThrows(IllegalArgumentException.class, () ->
-            Bulkhead.<String>of(0));
-        assertThrows(IllegalArgumentException.class, () ->
-            Bulkhead.<String>of(1).withMaxWait(Duration.ofMillis(-1)));
-        assertThrows(NullPointerException.class, () ->
-            Bulkhead.<String>of(1).withMaxWait(null));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Bulkhead.<String>of(0));
+
+        var bulkhead = Bulkhead.<String>of(1);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> bulkhead.withMaxWait(Duration.ofMillis(-1)));
+        assertThatNullPointerException()
+            .isThrownBy(() -> bulkhead.withMaxWait(null));
     }
 
     @Test

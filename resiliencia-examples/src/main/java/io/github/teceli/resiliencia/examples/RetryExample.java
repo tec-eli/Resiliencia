@@ -22,6 +22,10 @@ public class RetryExample {
     private static final int INITIAL_DELAY_MS = 50;
     private static final double BACKOFF_MULTIPLIER = 2.0;
 
+    private static final String RESULT = "Result: {}";
+    private static final String TOTAL_ATTEMPTS = "Total attempts: {}";
+    private static final String EXCEPTION = "Exception: {}";
+
     public static void main(String[] args) {
         log.info("=== Resiliencia MVP: Policy + Retry + Sync Execution ===");
 
@@ -55,10 +59,10 @@ public class RetryExample {
                 }
                 return "Success on attempt " + counter.value;
             });
-            log.info("Result: {}", result);
-            log.info("Total attempts: {}", counter.value);
+            log.info(RESULT, result);
+            log.info(TOTAL_ATTEMPTS, counter.value);
         } catch (Exception e) {
-            log.warn("Exception: {}", e.getMessage());
+            log.warn(EXCEPTION, e.getMessage());
         }
     }
 
@@ -78,10 +82,10 @@ public class RetryExample {
                 counter.value++;
                 throw new RuntimeException("Always fails (attempt " + counter.value + ")");
             });
-            log.info("Result: {}", result);
+            log.info(RESULT, result);
         } catch (Exception e) {
-            log.warn("Exception: {}", e.getMessage());
-            log.info("Total attempts: {}", counter.value);
+            log.warn(EXCEPTION, e.getMessage());
+            log.info(TOTAL_ATTEMPTS, counter.value);
         }
     }
 
@@ -117,9 +121,9 @@ public class RetryExample {
                 }
                 return "Success!";
             });
-            log.info("Result: {}", result);
+            log.info(RESULT, result);
         } catch (Exception e) {
-            log.warn("Exception: {}", e.getMessage());
+            log.warn(EXCEPTION, e.getMessage());
         }
     }
 }

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -214,12 +215,13 @@ class RetryPatternTest {
 
     @Test
     void should_rejectInvalidJitterAndMaxDelay_when_configured() {
-        assertThrows(IllegalArgumentException.class, () ->
-            Retry.<String>create().withJitter(-0.1));
-        assertThrows(IllegalArgumentException.class, () ->
-            Retry.<String>create().withJitter(1.1));
-        assertThrows(IllegalArgumentException.class, () ->
-            Retry.<String>create().withMaxDelay(-1));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() ->
+                Retry.<String>create().withJitter(-0.1));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withJitter(1.1));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withMaxDelay(-1));
     }
 
     @Test

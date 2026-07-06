@@ -14,7 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -29,14 +31,17 @@ class PolicyOrderValidationTest {
         var retry = fakePattern(PatternKind.RETRY);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
-        var exception = assertThrows(InvalidPolicyException.class, () ->
-            Policy.compose(retry).and(circuitBreaker));
-        assertThat(exception)
-                .hasMessageContaining("Retry")
-                .hasMessageContaining("CircuitBreaker");
-        assertThat(exception.suggestedFix())
-                .asString()
-                .contains("CircuitBreaker before Retry");
+        var composedPolicy = Policy.compose(retry);
+
+        assertThatExceptionOfType(InvalidPolicyException.class)
+            .isThrownBy(() -> composedPolicy.and(circuitBreaker))
+            .withMessageContaining("Retry")
+            .withMessageContaining("CircuitBreaker")
+            .satisfies(exception ->
+                assertThat(exception.suggestedFix())
+                    .asString()
+                    .contains("CircuitBreaker before Retry")
+            );
     }
 
     @Test
@@ -58,8 +63,8 @@ class PolicyOrderValidationTest {
         var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
-        assertThrows(InvalidPolicyException.class, () ->
-            Policy.compose(retry).and(circuitBreaker));
+        assertThatExceptionOfType(InvalidPolicyException.class)
+            .isThrownBy(() -> Policy.compose(retry).and(circuitBreaker));
     }
 
     @Test
@@ -161,8 +166,8 @@ class PolicyOrderValidationTest {
 
     @Test
     void should_throwNullPointerException_when_useOptimumOrderReceivesNullPattern() {
-        assertThrows(NullPointerException.class, () ->
-            Policy.useOptimumOrder(fakePattern(PatternKind.RETRY), null));
+        assertThatNullPointerException()
+            .isThrownBy(() -> Policy.useOptimumOrder(fakePattern(PatternKind.RETRY), null));
     }
 
     /**

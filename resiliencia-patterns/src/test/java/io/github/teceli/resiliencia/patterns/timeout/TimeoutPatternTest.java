@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -226,10 +227,10 @@ class TimeoutPatternTest {
 
     @Test
     void should_throwIllegalArgumentException_when_timeoutIsNotPositive() {
-         assertThrows(IllegalArgumentException.class, () ->
-            Timeout.<String>of(Duration.ZERO));
-        assertThrows(IllegalArgumentException.class, () ->
-            Timeout.<String>of(Duration.ofMillis(-1)));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Timeout.<String>of(Duration.ZERO));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Timeout.<String>of(Duration.ofMillis(-1)));
     }
 
     @Test
