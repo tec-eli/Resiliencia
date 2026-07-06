@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for the Retry pattern MVP.
@@ -54,14 +54,13 @@ class RetryPatternTest {
                 .withMaxAttempts(3)
                 .withInitialDelay(10);
 
-        assertThatExceptionOfType(RetryExhaustedException.class)
-                .isThrownBy(() -> retry.call(() -> {
-                    counter.incrementAndGet();
-                    throw new RuntimeException("Always fails");
-                }))
-                .withCauseInstanceOf(RuntimeException.class)
-                .extracting(RetryExhaustedException::attemptCount)
-                .isEqualTo(3);
+        var exception = assertThrows(RetryExhaustedException.class, () -> retry.call(() -> {
+            counter.incrementAndGet();
+            throw new RuntimeException("Always fails");
+        }));
+        assertThat(exception)
+                .hasCauseInstanceOf(RuntimeException.class);
+        assertThat(exception.attemptCount()).isEqualTo(3);
 
         assertThat(counter.get()).isEqualTo(3);
     }
@@ -215,12 +214,12 @@ class RetryPatternTest {
 
     @Test
     void should_rejectInvalidJitterAndMaxDelay_when_configured() {
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Retry.<String>create().withJitter(-0.1));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Retry.<String>create().withJitter(1.1));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Retry.<String>create().withMaxDelay(-1));
+        assertThrows(IllegalArgumentException.class, () ->
+            Retry.<String>create().withJitter(-0.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            Retry.<String>create().withJitter(1.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            Retry.<String>create().withMaxDelay(-1));
     }
 
     @Test

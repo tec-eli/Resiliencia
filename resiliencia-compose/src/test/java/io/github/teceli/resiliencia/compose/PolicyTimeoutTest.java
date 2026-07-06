@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Integration tests for the real Timeout pattern composed in a Policy,
@@ -25,8 +25,8 @@ class PolicyTimeoutTest {
     void should_throwResilienciaTimeoutException_when_composedOperationExceedsTimeout() {
         var policy = Policy.compose(Timeout.<String>of(Duration.ofMillis(50)));
 
-        assertThatExceptionOfType(ResilienciaTimeoutException.class)
-                .isThrownBy(() -> policy.call(PolicyTimeoutTest::blockUntilInterrupted));
+        assertThrows(ResilienciaTimeoutException.class, () ->
+            policy.call(PolicyTimeoutTest::blockUntilInterrupted));
     }
 
     @Test
@@ -67,12 +67,11 @@ class PolicyTimeoutTest {
         var timeout = Timeout.<String>of(Duration.ofMillis(50));
         var policy = Policy.compose(retry).and(timeout);
 
-        assertThatExceptionOfType(ResilienciaException.class)
-                .isThrownBy(() -> policy.call(() -> {
-                    attempts.incrementAndGet();
-                    return blockUntilInterrupted();
-                }))
-                .withCauseInstanceOf(ResilienciaTimeoutException.class);
+        var exception = assertThrows(ResilienciaException.class, () -> policy.call(() -> {
+            attempts.incrementAndGet();
+            return blockUntilInterrupted();
+        }));
+        assertThat(exception).hasCauseInstanceOf(ResilienciaTimeoutException.class);
 
         assertThat(attempts.get()).isEqualTo(2);
     }

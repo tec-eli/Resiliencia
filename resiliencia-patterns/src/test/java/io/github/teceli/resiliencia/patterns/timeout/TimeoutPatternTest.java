@@ -13,8 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for the Timeout pattern: virtual-thread execution, interruption on deadline,
@@ -38,10 +37,9 @@ class TimeoutPatternTest {
     void should_throwResilienciaTimeoutException_when_operationExceedsTimeout() {
         var timeout = Timeout.<String>of(SHORT_TIMEOUT);
 
-        assertThatExceptionOfType(ResilienciaTimeoutException.class)
-                .isThrownBy(() -> timeout.call(TimeoutPatternTest::blockUntilInterrupted))
-                .extracting(ResilienciaTimeoutException::timeout)
-                .isEqualTo(SHORT_TIMEOUT);
+        var exception = assertThrows(ResilienciaTimeoutException.class, () ->
+            timeout.call(TimeoutPatternTest::blockUntilInterrupted));
+        assertThat(exception.timeout()).isEqualTo(SHORT_TIMEOUT);
     }
 
     @Test
@@ -49,17 +47,16 @@ class TimeoutPatternTest {
         var interrupted = new CountDownLatch(1);
         var timeout = Timeout.<String>of(SHORT_TIMEOUT);
 
-        assertThatExceptionOfType(ResilienciaTimeoutException.class)
-                .isThrownBy(() -> timeout.call(() -> {
-                    try {
-                        Thread.sleep(Duration.ofSeconds(30));
-                        return "never";
-                    } catch (InterruptedException e) {
-                        interrupted.countDown();
-                        Thread.currentThread().interrupt();
-                        throw new ResilienciaException("interrupted", e);
-                    }
-                }));
+        assertThrows(ResilienciaTimeoutException.class, () -> timeout.call(() -> {
+            try {
+                Thread.sleep(Duration.ofSeconds(30));
+                return "never";
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+                Thread.currentThread().interrupt();
+                throw new ResilienciaException("interrupted", e);
+            }
+        }));
 
         assertThat(interrupted.await(5, TimeUnit.SECONDS))
                 .as("worker thread should be interrupted when the deadline passes")
@@ -77,18 +74,17 @@ class TimeoutPatternTest {
         var completedNaturally = new CountDownLatch(1);
         var timeout = Timeout.<String>of(SHORT_TIMEOUT).withCancelOnTimeout(false);
 
-        assertThatExceptionOfType(ResilienciaTimeoutException.class)
-                .isThrownBy(() -> timeout.call(() -> {
-                    try {
-                        Thread.sleep(Duration.ofMillis(200));
-                        completedNaturally.countDown();
-                        return "finished naturally";
-                    } catch (InterruptedException e) {
-                        interrupted.countDown();
-                        Thread.currentThread().interrupt();
-                        throw new ResilienciaException("interrupted", e);
-                    }
-                }));
+        assertThrows(ResilienciaTimeoutException.class, () -> timeout.call(() -> {
+            try {
+                Thread.sleep(Duration.ofMillis(200));
+                completedNaturally.countDown();
+                return "finished naturally";
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+                Thread.currentThread().interrupt();
+                throw new ResilienciaException("interrupted", e);
+            }
+        }));
 
         assertThat(completedNaturally.await(5, TimeUnit.SECONDS))
                 .as("operation should be allowed to finish naturally when cancelOnTimeout is false")
@@ -114,11 +110,11 @@ class TimeoutPatternTest {
         var timeout = Timeout.<String>of(GENEROUS_TIMEOUT);
         var boom = new IllegalStateException("boom");
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> timeout.call(() -> {
-                    throw boom;
-                }))
-                .isSameAs(boom);
+        var exception = assertThrows(IllegalStateException.class, () ->
+            timeout.call(() -> {
+                throw boom;
+            }));
+        assertThat(exception).isSameAs(boom);
     }
 
     @Test
@@ -224,16 +220,16 @@ class TimeoutPatternTest {
 
     @Test
     void should_throwNullPointerException_when_timeoutIsNull() {
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> Timeout.<String>of(null));
+        assertThrows(NullPointerException.class, () ->
+            Timeout.<String>of(null));
     }
 
     @Test
     void should_throwIllegalArgumentException_when_timeoutIsNotPositive() {
-         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Timeout.<String>of(Duration.ZERO));
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> Timeout.<String>of(Duration.ofMillis(-1)));
+         assertThrows(IllegalArgumentException.class, () ->
+            Timeout.<String>of(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () ->
+            Timeout.<String>of(Duration.ofMillis(-1)));
     }
 
     @Test

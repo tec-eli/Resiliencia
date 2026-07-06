@@ -55,9 +55,11 @@ public final class OutcomeAssert<T> extends AbstractAssert<OutcomeAssert<T>, Out
     /**
      * Switch to standard AssertJ throwable assertions on the failure cause for further chaining.
      */
-    public AbstractThrowableAssert<?, ? extends Throwable> failureCause() {
+    public <S extends AbstractThrowableAssert<S, Throwable>> S failureCause() {
         isFailure();
-        return Assertions.assertThat(((Outcome.Failure<T>) actual).cause());
+        @SuppressWarnings("unchecked")
+        var result = (S) Assertions.assertThat(((Outcome.Failure<T>) actual).cause());
+        return result;
     }
 
     public OutcomeAssert<T> isTimedOut() {

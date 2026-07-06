@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for the RateLimiter pattern, driven by a manual clock so window and wait
@@ -33,13 +33,11 @@ class RateLimiterPatternTest {
         var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
         limiter.call(() -> "first");
 
-        assertThatExceptionOfType(RateLimiterException.class)
-                .isThrownBy(() -> limiter.call(() -> "rejected"))
-                .satisfies(e -> {
-                    assertThat(e.limit()).isEqualTo(1);
-                    assertThat(e.period()).isEqualTo(PERIOD);
-                    assertThat(e.maxWait()).isEqualTo(Duration.ZERO);
-                });
+        var exception = assertThrows(RateLimiterException.class, () ->
+            limiter.call(() -> "rejected"));
+        assertThat(exception.limit()).isEqualTo(1);
+        assertThat(exception.period()).isEqualTo(PERIOD);
+        assertThat(exception.maxWait()).isEqualTo(Duration.ZERO);
     }
 
     @Test
@@ -75,8 +73,8 @@ class RateLimiterPatternTest {
         manualClock.advance(PERIOD.multipliedBy(1000).plus(PERIOD.dividedBy(2)));
 
         assertThat(limiter.call(() -> "after idle")).isEqualTo("after idle");
-        assertThatExceptionOfType(RateLimiterException.class)
-                .isThrownBy(() -> limiter.call(() -> "rejected"));
+        assertThrows(RateLimiterException.class, () ->
+            limiter.call(() -> "rejected"));
     }
 
     @Test
@@ -104,8 +102,8 @@ class RateLimiterPatternTest {
         limiter.call(() -> "first");
         var before = manualClock.instant();
 
-        assertThatExceptionOfType(RateLimiterException.class)
-                .isThrownBy(() -> limiter.call(() -> "rejected"));
+        assertThrows(RateLimiterException.class, () ->
+            limiter.call(() -> "rejected"));
 
         assertThat(manualClock.instant())
                 .as("a hopeless wait should be rejected immediately, not slept out")
@@ -117,24 +115,24 @@ class RateLimiterPatternTest {
         var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
         var boom = new IllegalStateException("boom");
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> limiter.call(() -> {
-                    throw boom;
-                }))
-                .isSameAs(boom);
+        var exception = assertThrows(IllegalStateException.class, () ->
+            limiter.call(() -> {
+                throw boom;
+            }));
+        assertThat(exception).isSameAs(boom);
     }
 
     @Test
     void should_notRefundPermit_when_operationFails() {
         var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> limiter.call(() -> {
-                    throw new IllegalStateException("boom");
-                }));
+        assertThrows(IllegalStateException.class, () ->
+            limiter.call(() -> {
+                throw new IllegalStateException("boom");
+            }));
 
-        assertThatExceptionOfType(RateLimiterException.class)
-                .isThrownBy(() -> limiter.call(() -> "rejected"));
+        assertThrows(RateLimiterException.class, () ->
+            limiter.call(() -> "rejected"));
     }
 
     @Test
@@ -195,14 +193,14 @@ class RateLimiterPatternTest {
 
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> RateLimiter.<String>of(0, PERIOD));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> RateLimiter.<String>of(1, Duration.ZERO));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> RateLimiter.<String>of(1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> RateLimiter.<String>of(1, null));
+        assertThrows(IllegalArgumentException.class, () ->
+            RateLimiter.<String>of(0, PERIOD));
+        assertThrows(IllegalArgumentException.class, () ->
+            RateLimiter.<String>of(1, Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () ->
+            RateLimiter.<String>of(1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
+        assertThrows(NullPointerException.class, () ->
+            RateLimiter.<String>of(1, null));
     }
 
     @Test

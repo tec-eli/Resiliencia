@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for Policy composition MVP.
@@ -50,10 +50,9 @@ class PolicyTest {
 
         var policy = Policy.compose(retry);
 
-        assertThatExceptionOfType(RetryExhaustedException.class)
-                .isThrownBy(() -> policy.call(() -> {
-                    throw new RuntimeException("Always fails");
-                }));
+        assertThrows(RetryExhaustedException.class, () -> policy.call(() -> {
+            throw new RuntimeException("Always fails");
+        }));
     }
 
     @Test
@@ -166,13 +165,12 @@ class PolicyTest {
 
         var policy = Policy.compose(retry);
 
-        assertThatExceptionOfType(RetryExhaustedException.class)
-                .isThrownBy(() -> policy.call(() -> {
-                    throw new IllegalStateException("boom");
-                }))
-                .withCauseInstanceOf(IllegalStateException.class)
-                .extracting(RetryExhaustedException::attemptCount)
-                .isEqualTo(2);
+        var exception = assertThrows(RetryExhaustedException.class, () -> policy.call(() -> {
+            throw new IllegalStateException("boom");
+        }));
+        assertThat(exception)
+                .hasCauseInstanceOf(IllegalStateException.class);
+        assertThat(exception.attemptCount()).isEqualTo(2);
     }
 
     @Test
@@ -197,18 +195,18 @@ class PolicyTest {
 
         var policy = Policy.compose(passthrough);
 
-        assertThatExceptionOfType(ResilienciaException.class)
-                .isThrownBy(() -> policy.call(() -> {
-                    throw new IllegalArgumentException("not a resiliencia exception");
-                }))
+        var exception = assertThrows(ResilienciaException.class, () -> policy.call(() -> {
+            throw new IllegalArgumentException("not a resiliencia exception");
+        }));
+        assertThat(exception)
                 .isNotInstanceOf(RetryExhaustedException.class)
-                .withCauseInstanceOf(IllegalArgumentException.class);
+                .hasCauseInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void should_throwNullPointerException_when_composingNullPattern() {
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> Policy.compose(null));
+        assertThrows(NullPointerException.class, () ->
+            Policy.compose(null));
     }
 
     @Test
@@ -216,8 +214,8 @@ class PolicyTest {
         var retry = Retry.<String>create().withMaxAttempts(1);
         var policy = Policy.compose(retry);
 
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> policy.and(null));
+        assertThrows(NullPointerException.class, () ->
+            policy.and(null));
     }
 
     private static Resilient<String> recordingPattern(List<String> callOrder, String name) {

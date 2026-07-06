@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for the CircuitBreaker pattern: state machine transitions (Closed/Open/HalfOpen),
@@ -42,10 +42,10 @@ class CircuitBreakerPatternTest {
                 .withSlidingWindowSize(4)
                 .withFailureRateThreshold(0.5);
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
         // Window holds only 2/4 calls: thresholds are not evaluated yet, the operation still runs.
         assertThat(circuitBreaker.call(() -> "still closed")).isEqualTo("still closed");
@@ -63,11 +63,10 @@ class CircuitBreakerPatternTest {
         circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
 
         var executed = new AtomicInteger(0);
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> {
-                    executed.incrementAndGet();
-                    return "rejected";
-                }));
+        assertThrows(CircuitBreakerOpenException.class, () -> circuitBreaker.call(() -> {
+            executed.incrementAndGet();
+            return "rejected";
+        }));
         assertThat(executed.get()).isZero();
     }
 
@@ -87,8 +86,8 @@ class CircuitBreakerPatternTest {
         });
         circuitBreaker.outcome(() -> "fast");
 
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> "rejected"));
+        assertThrows(CircuitBreakerOpenException.class, () ->
+            circuitBreaker.call(() -> "rejected"));
     }
 
     @Test
@@ -132,9 +131,9 @@ class CircuitBreakerPatternTest {
     void should_includeNameInExceptionMessage_when_circuitIsOpen() {
         var circuitBreaker = openedCircuitBreaker(new ManualClock(), "payments");
 
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> "rejected"))
-                .withMessageContaining("payments");
+        var exception = assertThrows(CircuitBreakerOpenException.class, () ->
+            circuitBreaker.call(() -> "rejected"));
+        assertThat(exception).hasMessageContaining("payments");
     }
 
     @Test
@@ -172,15 +171,14 @@ class CircuitBreakerPatternTest {
         var circuitBreaker = openedCircuitBreaker(clock);
         clock.advance(WAIT_DURATION);
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
         var executed = new AtomicInteger(0);
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> {
-                    executed.incrementAndGet();
-                    return "rejected again";
-                }));
+        assertThrows(CircuitBreakerOpenException.class, () -> circuitBreaker.call(() -> {
+            executed.incrementAndGet();
+            return "rejected again";
+        }));
         assertThat(executed.get()).isZero();
     }
 
@@ -230,11 +228,11 @@ class CircuitBreakerPatternTest {
         var circuitBreaker = CircuitBreaker.<String>of("test");
         var boom = new IllegalStateException("boom");
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> {
-                    throw boom;
-                }))
-                .isSameAs(boom);
+        var exception = assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(() -> {
+                throw boom;
+            }));
+        assertThat(exception).isSameAs(boom);
     }
 
     @Test
@@ -255,10 +253,10 @@ class CircuitBreakerPatternTest {
                 .withFailureRateThreshold(0.5)
                 .withIgnoreOn(List.of(IllegalStateException.class));
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
         // Both calls were ignored for rate purposes even though the window is now full.
         assertThat(circuitBreaker.call(() -> "still closed")).isEqualTo("still closed");
@@ -272,21 +270,21 @@ class CircuitBreakerPatternTest {
                 .withRecordOn(List.of(IllegalStateException.class));
 
         // Not in recordOn: rethrown to the caller, but not counted against the window.
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> {
-                    throw new IllegalArgumentException("wrong type");
-                }));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> {
-                    throw new IllegalArgumentException("wrong type");
-                }));
+        assertThrows(IllegalArgumentException.class, () ->
+            circuitBreaker.call(() -> {
+                throw new IllegalArgumentException("wrong type");
+            }));
+        assertThrows(IllegalArgumentException.class, () ->
+            circuitBreaker.call(() -> {
+                throw new IllegalArgumentException("wrong type");
+            }));
 
         // Window is full of non-counted entries; one matching failure now tips the 50% rate.
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> "rejected"));
+        assertThrows(CircuitBreakerOpenException.class, () ->
+            circuitBreaker.call(() -> "rejected"));
     }
 
     @Test
@@ -297,10 +295,10 @@ class CircuitBreakerPatternTest {
                 .withRecordOn(List.of(IllegalStateException.class))
                 .withIgnoreOn(List.of(IllegalStateException.class));
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
         assertThat(circuitBreaker.call(() -> "still closed")).isEqualTo("still closed");
     }
@@ -315,8 +313,8 @@ class CircuitBreakerPatternTest {
         assertThat(circuitBreaker.call(() -> "bad")).isEqualTo("bad");
         assertThat(circuitBreaker.call(() -> "bad")).isEqualTo("bad");
 
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> circuitBreaker.call(() -> "rejected"));
+        assertThrows(CircuitBreakerOpenException.class, () ->
+            circuitBreaker.call(() -> "rejected"));
     }
 
     @Test
@@ -406,8 +404,8 @@ class CircuitBreakerPatternTest {
                 .withListener(event -> events.add((CircuitBreakerEvent) event)));
         clock.advance(WAIT_DURATION);
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> circuitBreaker.call(CircuitBreakerPatternTest::boom));
+        assertThrows(IllegalStateException.class, () ->
+            circuitBreaker.call(CircuitBreakerPatternTest::boom));
 
         assertThat(events)
                 .filteredOn(CircuitBreakerEvent.Opened.class::isInstance)
@@ -430,10 +428,9 @@ class CircuitBreakerPatternTest {
         var circuitBreaker = openedCircuitBreaker(clock);
         clock.advance(WAIT_DURATION);
 
-        assertThatExceptionOfType(TestError.class)
-                .isThrownBy(() -> circuitBreaker.outcome(() -> {
-                    throw new TestError();
-                }));
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> {
+            throw new TestError();
+        }));
 
         // The permit consumed by the Error's test call was resolved instead of leaking: the
         // circuit reopens, exactly as it would for a normal failed test call.
@@ -454,44 +451,46 @@ class CircuitBreakerPatternTest {
 
         assertThat(reconfigured).isNotSameAs(original);
         assertThat(reconfigured.call(() -> "independent")).isEqualTo("independent");
-        assertThatExceptionOfType(CircuitBreakerOpenException.class)
-                .isThrownBy(() -> original.call(() -> "still open"));
+        assertThrows(CircuitBreakerOpenException.class, () ->
+            original.call(() -> "still open"));
     }
 
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.of(null));
+        assertThrows(NullPointerException.class, () ->
+            CircuitBreaker.of(null));
 
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withFailureRateThreshold(0.0));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withFailureRateThreshold(1.1));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withSlowCallRateThreshold(0.0));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withSlowCallRateThreshold(1.1));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withSlidingWindowSize(0));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withPermittedCallsInHalfOpenState(0));
+        var cb1 = CircuitBreaker.<String>of("test");
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withFailureRateThreshold(0.0));
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withFailureRateThreshold(1.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withSlowCallRateThreshold(0.0));
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withSlowCallRateThreshold(1.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withSlidingWindowSize(0));
+        assertThrows(IllegalArgumentException.class, () ->
+            cb1.withPermittedCallsInHalfOpenState(0));
 
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withWaitDurationInOpenState(null));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withRecordOn(null));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withIgnoreOn(null));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withRecordOnResult(null));
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> CircuitBreaker.<String>of("test").withClock(null));
+        var cb2 = CircuitBreaker.<String>of("test");
+        assertThrows(NullPointerException.class, () ->
+            cb2.withWaitDurationInOpenState(null));
+        assertThrows(NullPointerException.class, () ->
+            cb2.withRecordOn(null));
+        assertThrows(NullPointerException.class, () ->
+            cb2.withIgnoreOn(null));
+        assertThrows(NullPointerException.class, () ->
+            cb2.withRecordOnResult(null));
+        assertThrows(NullPointerException.class, () ->
+            cb2.withClock(null));
     }
 
     @Test
     void should_throwIllegalArgumentException_when_openStateHasNegativeRemainingWait() {
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> new CircuitState.Open(Instant.now(), Duration.ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () ->
+            new CircuitState.Open(Instant.now(), Duration.ofMillis(-1)));
     }
 
     @Test

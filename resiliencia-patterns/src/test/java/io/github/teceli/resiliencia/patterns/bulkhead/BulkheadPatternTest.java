@@ -13,9 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for the Bulkhead pattern: concurrency limiting, fail-fast and bounded-wait
@@ -36,13 +34,12 @@ class BulkheadPatternTest {
     void should_throwBulkheadFullException_when_allPermitsInUse() throws Exception {
         var bulkhead = Bulkhead.<String>of(1);
 
-        withPermitHeld(bulkhead, () ->
-                assertThatExceptionOfType(BulkheadFullException.class)
-                        .isThrownBy(() -> bulkhead.call(() -> "rejected"))
-                        .satisfies(e -> {
-                            assertThat(e.maxConcurrentCalls()).isEqualTo(1);
-                            assertThat(e.maxWait()).isEqualTo(Duration.ZERO);
-                        }));
+        withPermitHeld(bulkhead, () -> {
+            var exception = assertThrows(BulkheadFullException.class, () ->
+                bulkhead.call(() -> "rejected"));
+            assertThat(exception.maxConcurrentCalls()).isEqualTo(1);
+            assertThat(exception.maxWait()).isEqualTo(Duration.ZERO);
+        });
     }
 
     @Test
@@ -88,10 +85,9 @@ class BulkheadPatternTest {
     void should_releasePermit_when_operationFails() {
         var bulkhead = Bulkhead.<String>of(1);
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> bulkhead.call(() -> {
-                    throw new IllegalStateException("boom");
-                }));
+        assertThrows(IllegalStateException.class, () -> bulkhead.call(() -> {
+            throw new IllegalStateException("boom");
+        }));
 
         assertThat(bulkhead.call(() -> "recovered")).isEqualTo("recovered");
     }
@@ -101,11 +97,11 @@ class BulkheadPatternTest {
         var bulkhead = Bulkhead.<String>of(1);
         var boom = new IllegalStateException("boom");
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> bulkhead.call(() -> {
-                    throw boom;
-                }))
-                .isSameAs(boom);
+        var exception = assertThrows(IllegalStateException.class, () ->
+            bulkhead.call(() -> {
+                throw boom;
+            }));
+        assertThat(exception).isSameAs(boom);
     }
 
     @Test
@@ -207,12 +203,12 @@ class BulkheadPatternTest {
 
     @Test
     void should_throwIllegalArgumentException_when_configurationInvalid() {
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> Bulkhead.<String>of(0));
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(Duration.ofMillis(-1)));
-        assertThatNullPointerException()
-            .isThrownBy(() -> Bulkhead.<String>of(1).withMaxWait(null));
+        assertThrows(IllegalArgumentException.class, () ->
+            Bulkhead.<String>of(0));
+        assertThrows(IllegalArgumentException.class, () ->
+            Bulkhead.<String>of(1).withMaxWait(Duration.ofMillis(-1)));
+        assertThrows(NullPointerException.class, () ->
+            Bulkhead.<String>of(1).withMaxWait(null));
     }
 
     @Test

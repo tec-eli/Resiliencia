@@ -14,8 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for Policy pattern order validation and Policy.useOptimumOrder order resolution.
@@ -29,11 +29,12 @@ class PolicyOrderValidationTest {
         var retry = fakePattern(PatternKind.RETRY);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
-        assertThatExceptionOfType(InvalidPolicyException.class)
-                .isThrownBy(() -> Policy.compose(retry).and(circuitBreaker))
-                .withMessageContaining("Retry")
-                .withMessageContaining("CircuitBreaker")
-                .extracting(InvalidPolicyException::suggestedFix)
+        var exception = assertThrows(InvalidPolicyException.class, () ->
+            Policy.compose(retry).and(circuitBreaker));
+        assertThat(exception)
+                .hasMessageContaining("Retry")
+                .hasMessageContaining("CircuitBreaker");
+        assertThat(exception.suggestedFix())
                 .asString()
                 .contains("CircuitBreaker before Retry");
     }
@@ -48,8 +49,8 @@ class PolicyOrderValidationTest {
 
         var retryThenBulkhead = Policy.compose(retry).and(bulkhead);
 
-        assertThatExceptionOfType(InvalidPolicyException.class)
-                .isThrownBy(() -> retryThenBulkhead.and(circuitBreaker));
+        assertThrows(InvalidPolicyException.class, () ->
+            retryThenBulkhead.and(circuitBreaker));
     }
 
     @Test
@@ -57,8 +58,8 @@ class PolicyOrderValidationTest {
         var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
-        assertThatExceptionOfType(InvalidPolicyException.class)
-                .isThrownBy(() -> Policy.compose(retry).and(circuitBreaker));
+        assertThrows(InvalidPolicyException.class, () ->
+            Policy.compose(retry).and(circuitBreaker));
     }
 
     @Test
@@ -154,15 +155,14 @@ class PolicyOrderValidationTest {
 
     @Test
     void should_throwInvalidPolicyException_when_useOptimumOrderReceivesNoPatterns() {
-        assertThatExceptionOfType(InvalidPolicyException.class)
-                .isThrownBy(Policy::<String>useOptimumOrder)
-                .withMessageContaining("at least one pattern");
+        var exception = assertThrows(InvalidPolicyException.class, Policy::<String>useOptimumOrder);
+        assertThat(exception).hasMessageContaining("at least one pattern");
     }
 
     @Test
     void should_throwNullPointerException_when_useOptimumOrderReceivesNullPattern() {
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> Policy.useOptimumOrder(fakePattern(PatternKind.RETRY), null));
+        assertThrows(NullPointerException.class, () ->
+            Policy.useOptimumOrder(fakePattern(PatternKind.RETRY), null));
     }
 
     /**
