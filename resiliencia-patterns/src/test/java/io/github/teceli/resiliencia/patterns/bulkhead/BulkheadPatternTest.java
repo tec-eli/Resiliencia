@@ -25,7 +25,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_returnValue_when_underConcurrencyLimit() {
-        var bulkhead = Bulkhead.<String>of(2);
+        var bulkhead = Bulkhead.<String>of("bulkhead",2);
 
         var result = bulkhead.call(() -> "done");
 
@@ -34,7 +34,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_throwBulkheadFullException_when_allPermitsInUse() throws Exception {
-        var bulkhead = Bulkhead.<String>of(1);
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
 
         withPermitHeld(bulkhead, () -> {
             var exception = assertThrows(BulkheadFullException.class, () ->
@@ -46,7 +46,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_returnFailureWithBulkheadFullException_when_usingOutcomeMethod() throws Exception {
-        var bulkhead = Bulkhead.<String>of(1);
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
 
         withPermitHeld(bulkhead, () -> {
             var outcome = bulkhead.outcome(() -> "rejected");
@@ -59,7 +59,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_waitForPermit_when_maxWaitConfigured() throws Exception {
-        var bulkhead = Bulkhead.<String>of(1).withMaxWait(Duration.ofSeconds(5));
+        var bulkhead = Bulkhead.<String>of("bulkhead",1).withMaxWait(Duration.ofSeconds(5));
         var holderInside = new CountDownLatch(1);
         var releaseHolder = new CountDownLatch(1);
 
@@ -85,7 +85,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_releasePermit_when_operationFails() {
-        var bulkhead = Bulkhead.<String>of(1);
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
 
         assertThrows(IllegalStateException.class, () -> bulkhead.call(() -> {
             throw new IllegalStateException("boom");
@@ -96,7 +96,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_rethrowOriginalException_when_operationFails() {
-        var bulkhead = Bulkhead.<String>of(1);
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
         var boom = new IllegalStateException("boom");
 
         var exception = assertThrows(IllegalStateException.class, () ->
@@ -108,7 +108,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_neverExceedConcurrencyLimit_when_calledFromManyThreads() throws Exception {
-        var bulkhead = Bulkhead.<String>of(2).withMaxWait(Duration.ofSeconds(10));
+        var bulkhead = Bulkhead.<String>of("bulkhead",2).withMaxWait(Duration.ofSeconds(10));
         var inFlight = new AtomicInteger(0);
         var maxObserved = new AtomicInteger(0);
 
@@ -132,7 +132,7 @@ class BulkheadPatternTest {
     @Test
     void should_emitPermittedAndFinishedEvents_when_callSucceeds() {
         var events = new ArrayList<BulkheadEvent>();
-        var bulkhead = Bulkhead.<String>of(1)
+        var bulkhead = Bulkhead.<String>of("bulkhead",1)
                 .withListener(event -> events.add((BulkheadEvent) event));
 
         bulkhead.call(() -> "done");
@@ -147,7 +147,7 @@ class BulkheadPatternTest {
     @Test
     void should_reportActiveCallCount_when_secondCallOverlapsFirst() throws Exception {
         var events = new ArrayList<BulkheadEvent>();
-        var bulkhead = Bulkhead.<String>of(2)
+        var bulkhead = Bulkhead.<String>of("bulkhead",2)
                 .withListener(event -> events.add((BulkheadEvent) event));
         var firstInside = new CountDownLatch(1);
         var releaseFirst = new CountDownLatch(1);
@@ -176,7 +176,7 @@ class BulkheadPatternTest {
     @Test
     void should_emitRejectedEvent_when_bulkheadIsFull() throws Exception {
         var events = new ArrayList<BulkheadEvent>();
-        var bulkhead = Bulkhead.<String>of(1)
+        var bulkhead = Bulkhead.<String>of("bulkhead",1)
                 .withListener(event -> events.add((BulkheadEvent) event));
 
         withPermitHeld(bulkhead, () -> {
@@ -189,7 +189,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_returnOperationResult_when_listenerThrowsException() {
-        var bulkhead = Bulkhead.<String>of(1)
+        var bulkhead = Bulkhead.<String>of("bulkhead",1)
                 .withListener(event -> {
                     throw new IllegalStateException("listener boom");
                 });
@@ -199,16 +199,16 @@ class BulkheadPatternTest {
 
     @Test
     void should_reportBulkheadKind_when_patternKindQueried() {
-        assertThat(Bulkhead.<String>of(1).patternKind()).isEqualTo(PatternKind.BULKHEAD);
-        assertThat(Bulkhead.<String>of(1).patternName()).isEqualTo("bulkhead");
+        assertThat(Bulkhead.<String>of("bulkhead",1).patternKind()).isEqualTo(PatternKind.BULKHEAD);
+        assertThat(Bulkhead.<String>of("bulkhead",1).patternName()).isEqualTo("bulkhead");
     }
 
     @Test
     void should_throwIllegalArgumentException_when_configurationInvalid() {
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Bulkhead.<String>of(0));
+            .isThrownBy(() -> Bulkhead.<String>of("bulkhead",0));
 
-        var bulkhead = Bulkhead.<String>of(1);
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
 
         assertThatIllegalArgumentException()
             .isThrownBy(() -> bulkhead.withMaxWait(Duration.ofMillis(-1)));
@@ -218,7 +218,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_createIndependentInstanceWithFreshPermits_when_witherCalled() throws Exception {
-        var original = Bulkhead.<String>of(1);
+        var original = Bulkhead.<String>of("bulkhead",1);
 
         var reconfigured = original.withMaxWait(Duration.ofMillis(5));
 

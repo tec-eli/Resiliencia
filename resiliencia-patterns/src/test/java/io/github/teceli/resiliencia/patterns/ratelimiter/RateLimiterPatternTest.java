@@ -22,7 +22,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_permitCalls_when_underLimitWithinWindow() {
-        var limiter = RateLimiter.<String>of(2, PERIOD).withClock(new ManualClock());
+        var limiter = RateLimiter.<String>of("rate-limiter",2, PERIOD).withClock(new ManualClock());
 
         assertThat(limiter.call(() -> "first")).isEqualTo("first");
         assertThat(limiter.call(() -> "second")).isEqualTo("second");
@@ -30,7 +30,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_throwRateLimiterException_when_limitExceededWithinWindow() {
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(new ManualClock());
         limiter.call(() -> "first");
 
         var exception = assertThrows(RateLimiterException.class, () ->
@@ -42,7 +42,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_returnFailureWithRateLimiterException_when_usingOutcomeMethod() {
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(new ManualClock());
         limiter.call(() -> "first");
 
         var outcome = limiter.outcome(() -> "rejected");
@@ -55,7 +55,7 @@ class RateLimiterPatternTest {
     @Test
     void should_permitCallsAgain_when_nextWindowOpens() {
         var manualClock = new ManualClock();
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(manualClock);
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(manualClock);
         limiter.call(() -> "first");
 
         manualClock.advance(PERIOD);
@@ -66,7 +66,7 @@ class RateLimiterPatternTest {
     @Test
     void should_alignWindows_when_limiterWasIdleForManyPeriods() {
         var manualClock = new ManualClock();
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(manualClock);
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(manualClock);
         limiter.call(() -> "first");
 
         // Land mid-window many periods later: one permit is available, the next is not.
@@ -80,7 +80,7 @@ class RateLimiterPatternTest {
     @Test
     void should_waitForNextWindow_when_maxWaitAllowsIt() {
         var manualClock = new ManualClock();
-        var limiter = RateLimiter.<String>of(1, PERIOD)
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
                 .withMaxWait(PERIOD.multipliedBy(2))
                 .withClock(manualClock);
         limiter.call(() -> "first");
@@ -96,7 +96,7 @@ class RateLimiterPatternTest {
     @Test
     void should_rejectWithoutWaiting_when_maxWaitEndsBeforeNextWindow() {
         var manualClock = new ManualClock();
-        var limiter = RateLimiter.<String>of(1, PERIOD)
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
                 .withMaxWait(Duration.ofMillis(30))
                 .withClock(manualClock);
         limiter.call(() -> "first");
@@ -112,7 +112,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_rethrowOriginalException_when_operationFails() {
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(new ManualClock());
         var boom = new IllegalStateException("boom");
 
         var exception = assertThrows(IllegalStateException.class, () ->
@@ -124,7 +124,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_notRefundPermit_when_operationFails() {
-        var limiter = RateLimiter.<String>of(1, PERIOD).withClock(new ManualClock());
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(new ManualClock());
 
         assertThrows(IllegalStateException.class, () ->
             limiter.call(() -> {
@@ -138,7 +138,7 @@ class RateLimiterPatternTest {
     @Test
     void should_emitPermittedAndRejectedEvents() {
         var events = new ArrayList<RateLimiterEvent>();
-        var limiter = RateLimiter.<String>of(1, PERIOD)
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
                 .withClock(new ManualClock())
                 .withListener(event -> events.add((RateLimiterEvent) event));
 
@@ -156,7 +156,7 @@ class RateLimiterPatternTest {
     @Test
     void should_reportRemainingPermits_when_multiplePermitsAvailable() {
         var events = new ArrayList<RateLimiterEvent>();
-        var limiter = RateLimiter.<String>of(3, PERIOD)
+        var limiter = RateLimiter.<String>of("rate-limiter",3, PERIOD)
                 .withClock(new ManualClock())
                 .withListener(event -> events.add((RateLimiterEvent) event));
 
@@ -174,7 +174,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_returnOperationResult_when_listenerThrowsException() {
-        var limiter = RateLimiter.<String>of(1, PERIOD)
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
                 .withClock(new ManualClock())
                 .withListener(event -> {
                     throw new IllegalStateException("listener boom");
@@ -185,7 +185,7 @@ class RateLimiterPatternTest {
 
     @Test
     void should_reportRateLimiterKind_when_patternKindQueried() {
-        var limiter = RateLimiter.<String>of(1, PERIOD);
+        var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD);
 
         assertThat(limiter.patternKind()).isEqualTo(PatternKind.RATE_LIMITER);
         assertThat(limiter.patternName()).isEqualTo("rate-limiter");
@@ -194,19 +194,19 @@ class RateLimiterPatternTest {
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
         assertThrows(IllegalArgumentException.class, () ->
-            RateLimiter.<String>of(0, PERIOD));
+            RateLimiter.<String>of("rate-limiter",0, PERIOD));
         assertThrows(IllegalArgumentException.class, () ->
-            RateLimiter.<String>of(1, Duration.ZERO));
+            RateLimiter.<String>of("rate-limiter",1, Duration.ZERO));
         assertThrows(IllegalArgumentException.class, () ->
-            RateLimiter.<String>of(1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
+            RateLimiter.<String>of("rate-limiter",1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
         assertThrows(NullPointerException.class, () ->
-            RateLimiter.<String>of(1, null));
+            RateLimiter.<String>of("rate-limiter",1, null));
     }
 
     @Test
     void should_createIndependentInstanceWithFreshWindow_when_witherCalled() {
         var manualClock = new ManualClock();
-        var original = RateLimiter.<String>of(1, PERIOD).withClock(manualClock);
+        var original = RateLimiter.<String>of("rate-limiter",1, PERIOD).withClock(manualClock);
         original.call(() -> "uses original's only permit");
 
         var reconfigured = original.withLimit(1);

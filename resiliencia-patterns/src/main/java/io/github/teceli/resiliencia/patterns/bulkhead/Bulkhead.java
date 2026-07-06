@@ -33,14 +33,16 @@ public final class Bulkhead<T> implements Resilient<T> {
     private static final Logger log = LoggerFactory.getLogger(Bulkhead.class);
     private static final Duration MAX_MILLIS_DURATION = Duration.ofMillis(Long.MAX_VALUE);
 
+    private final String name;
     private final int maxConcurrentCalls;
     private final Duration maxWait;
     private final List<ResilienceEvent.Listener> listeners;
     private final Clock clock;
     private final Semaphore permits;
 
-    private Bulkhead(int maxConcurrentCalls, Duration maxWait,
+    private Bulkhead(String name, int maxConcurrentCalls, Duration maxWait,
                      List<ResilienceEvent.Listener> listeners, Clock clock) {
+        Objects.requireNonNull(name, "name must not be null");
         if (maxConcurrentCalls < 1) {
             throw new IllegalArgumentException("maxConcurrentCalls must be >= 1");
         }
@@ -49,6 +51,7 @@ public final class Bulkhead<T> implements Resilient<T> {
             throw new IllegalArgumentException("maxWait must be >= 0");
         }
         Objects.requireNonNull(clock, "clock must not be null");
+        this.name = name;
         this.maxConcurrentCalls = maxConcurrentCalls;
         this.maxWait = maxWait;
         this.listeners = List.copyOf(listeners);
@@ -61,12 +64,13 @@ public final class Bulkhead<T> implements Resilient<T> {
      * calls immediately ({@code maxWait} zero). Refine via {@code withX} methods, e.g.
      * {@link #withMaxWait} to let excess calls wait for a permit instead.
      */
-    public static <T> Bulkhead<T> of(int maxConcurrentCalls) {
-        return new Bulkhead<>(maxConcurrentCalls, Duration.ZERO, List.of(), Clock.systemClock());
+    public static <T> Bulkhead<T> of(String name, int maxConcurrentCalls) {
+        return new Bulkhead<>(name, maxConcurrentCalls, Duration.ZERO, List.of(),
+                Clock.systemClock());
     }
 
     public Bulkhead<T> withMaxConcurrentCalls(int maxConcurrentCalls) {
-        return new Bulkhead<>(maxConcurrentCalls, maxWait, listeners, clock);
+        return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
     }
 
     /**
@@ -74,13 +78,13 @@ public final class Bulkhead<T> implements Resilient<T> {
      * Zero (the default) rejects immediately.
      */
     public Bulkhead<T> withMaxWait(Duration maxWait) {
-        return new Bulkhead<>(maxConcurrentCalls, maxWait, listeners, clock);
+        return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
     }
 
     public Bulkhead<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
-        return new Bulkhead<>(maxConcurrentCalls, maxWait, newListeners, clock);
+        return new Bulkhead<>(name, maxConcurrentCalls, maxWait, newListeners, clock);
     }
 
     /**
@@ -88,7 +92,11 @@ public final class Bulkhead<T> implements Resilient<T> {
      * The permit wait is enforced against real elapsed time.
      */
     public Bulkhead<T> withClock(Clock clock) {
-        return new Bulkhead<>(maxConcurrentCalls, maxWait, listeners, clock);
+        return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
+    }
+
+    public String name() {
+        return name;
     }
 
     public int maxConcurrentCalls() {

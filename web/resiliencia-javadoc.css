@@ -218,6 +218,7 @@ button {
     padding:10px 0 0 0;
     overflow:hidden;
     font-size:0.857em;
+    border-bottom: 3px solid #001c40;
 }
 button#navbar-toggle-button {
     display:none;
@@ -302,14 +303,20 @@ ul.sub-nav-list li {
 .title {
     color:var(--title-color);
     margin:10px 0;
+    font-family: 'Rock Salt', cursive;
+    font-weight: normal;
+    letter-spacing: 0.02em;
 }
 .sub-title {
     margin:5px 0 0 0;
+    font-family: var(--code-font-family);
+    font-size: 0.85em;
 }
 ul.contents-list {
     margin: 0 0 15px 0;
     padding: 0;
     list-style: none;
+    font-family: var(--code-font-family);
 }
 ul.contents-list li {
     font-size:0.93em;
@@ -342,11 +349,13 @@ main {
     position:relative;
 }
 dl.notes > dt {
-    font-family: var(--body-font-family);
-    font-size:0.856em;
-    font-weight:bold;
+    font-family: var(--code-font-family);
+    font-size: 0.78em;
+    font-weight: 700;
     margin:10px 0 0 0;
     color:var(--body-text-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 dl.notes > dd {
     margin:5px 10px 10px 0;
@@ -538,6 +547,32 @@ div.checkboxes > label > input {
     .three-column-release-summary .col-last{
         grid-column-end: span 2;
     }
+    .about-language {
+        padding-right: 16px;
+    }
+    ul.nav-list li {
+        margin-left: 5px;
+    }
+    ul.sub-nav-list-small > li {
+        margin-left: 5px;
+    }
+    main {
+        padding: 10px;
+    }
+    .summary section[class$="-summary"], .details section[class$="-details"],
+    .class-uses .detail, .serialized-class-details {
+        padding: 0 8px 5px 8px;
+    }
+    body {
+        -webkit-text-size-adjust: none;
+    }
+    pre.snippet {
+        padding-top: 26px;
+    }
+    button.snippet-copy {
+        top: 4px;
+        right: 4px;
+    }
 }
 @media screen and (max-width: 600px) {
     .two-column-summary {
@@ -590,10 +625,10 @@ div.checkboxes > label > input {
     <path d="M10.101 57.059L63.019 4.142l52.917 52.917" style="opacity:.35;"/> \
     <path d="M10.101 86.392l52.917 52.917 52.917-52.917" style="opacity:.75;"/></svg>');
 }
-.col-first, .col-first {
+.col-first {
     font-size:0.93em;
 }
-.col-second, .col-second, .col-last, .col-constructor-name, .col-summary-item-name, .col-last {
+.col-second, .col-last, .col-constructor-name, .col-summary-item-name {
     font-size:0.93em;
 }
 .col-first, .col-second, .col-constructor-name {
@@ -603,8 +638,6 @@ div.checkboxes > label > input {
 .col-last {
     white-space:normal;
 }
-.col-first a:link, .col-first a:visited,
-.col-second a:link, .col-second a:visited,
 .col-first a:link, .col-first a:visited,
 .col-second a:link, .col-second a:visited,
 .col-constructor-name a:link, .col-constructor-name a:visited,
@@ -1056,9 +1089,7 @@ div.snippet-container:hover button.snippet-copy span {
  *      Best for tables that have a header row, and a body containing a series of simple rows.
  */
 
-table.borderless,
-table.plain,
-table.striped {
+table.borderless {
     margin-top: 10px;
     margin-bottom: 10px;
 }
@@ -1082,6 +1113,8 @@ table.borderless > thead > tr, table.borderless > tbody > tr, table.borderless >
     background-color: transparent;
 }
 table.plain {
+    margin-top: 10px;
+    margin-bottom: 10px;
     border-collapse: collapse;
     border: 1px solid var(--table-border-color);
 }
@@ -1093,6 +1126,8 @@ table.plain > thead > tr > td, table.plain > tbody > tr > td, table.plain > tr >
     border: 1px solid var(--table-border-color);
 }
 table.striped {
+    margin-top: 10px;
+    margin-bottom: 10px;
     border-collapse: collapse;
     border: 1px solid var(--table-border-color);
 }
@@ -1214,34 +1249,11 @@ table.striped > tbody > tr > th {
         width: 26px;
     }
 }
-@media screen and (max-width: 800px) {
-    .about-language {
-        padding-right: 16px;
-    }
-    ul.nav-list li {
-        margin-left: 5px;
-    }
-    ul.sub-nav-list-small > li {
-        margin-left: 5px;
-    }
-    main {
-        padding: 10px;
-    }
-    .summary section[class$="-summary"], .details section[class$="-details"],
-    .class-uses .detail, .serialized-class-details {
-        padding: 0 8px 5px 8px;
-    }
-    body {
-        -webkit-text-size-adjust: none;
-    }
-}
 @media screen and (max-width: 400px) {
     .about-language {
         font-size: 10px;
         padding-right: 12px;
     }
-}
-@media screen and (max-width: 400px) {
     .nav-list-search {
         width: 94%;
     }
@@ -1272,15 +1284,6 @@ pre.snippet {
 div.snippet-container {
     position: relative;
 }
-@media screen and (max-width: 800px) {
-    pre.snippet {
-        padding-top: 26px;
-    }
-    button.snippet-copy {
-        top: 4px;
-        right: 4px;
-    }
-}
 pre.snippet .italic {
     font-style: italic;
 }
@@ -1297,15 +1300,6 @@ pre.snippet .highlighted {
  * Prose stays in the hand face; structural/label chrome moves to the mono utility
  * face for scannability; the page title gets the stamp face, once per page.
  */
-.title {
-    font-family: 'Rock Salt', cursive;
-    font-weight: normal;
-    letter-spacing: 0.02em;
-}
-.sub-title {
-    font-family: var(--code-font-family);
-    font-size: 0.85em;
-}
 .caption span,
 .table-header,
 div.table-tabs > button {
@@ -1314,18 +1308,7 @@ div.table-tabs > button {
     letter-spacing: 0.04em;
     font-weight: 700;
 }
-dl.notes > dt {
-    font-family: var(--code-font-family);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 700;
-    font-size: 0.78em;
-}
 .top-nav,
-.sub-nav,
-ul.contents-list {
+.sub-nav {
     font-family: var(--code-font-family);
-}
-.top-nav {
-    border-bottom: 3px solid #001c40;
 }

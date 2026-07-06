@@ -374,8 +374,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      */
     private void evaluateHalfOpenOutcome(StateSlot slot, boolean failed, boolean slow) {
         if (failed) {
-            open(slot, slow ? CircuitBreakerEvent.Reason.SLOW_CALL_RATE_EXCEEDED
-                             : CircuitBreakerEvent.Reason.FAILURE_RATE_EXCEEDED);
+            open(slot, CircuitBreakerEvent.Reason.FAILURE_RATE_EXCEEDED);
             return;
         }
         if (slot.successes.incrementAndGet() >= permittedCallsInHalfOpenState) {

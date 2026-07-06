@@ -42,3 +42,7 @@ build/
 ### INTERNAL ###
 
 ./internal
+
+### GitHub Page ###
+
+./_site

@@ -35,6 +35,7 @@ public final class RateLimiter<T> implements Resilient<T> {
     private static final Logger log = LoggerFactory.getLogger(RateLimiter.class);
     private static final Duration MAX_MILLIS_DURATION = Duration.ofMillis(Long.MAX_VALUE);
 
+    private final String name;
     private final int limit;
     private final Duration period;
     private final Duration maxWait;
@@ -45,8 +46,9 @@ public final class RateLimiter<T> implements Resilient<T> {
     private Instant windowStart; // guarded by lock
     private int used;            // guarded by lock
 
-    private RateLimiter(int limit, Duration period, Duration maxWait,
+    private RateLimiter(String name, int limit, Duration period, Duration maxWait,
                         List<ResilienceEvent.Listener> listeners, Clock clock) {
+        Objects.requireNonNull(name, "name must not be null");
         if (limit < 1) {
             throw new IllegalArgumentException("limit must be >= 1");
         }
@@ -59,6 +61,7 @@ public final class RateLimiter<T> implements Resilient<T> {
             throw new IllegalArgumentException("maxWait must be >= 0");
         }
         Objects.requireNonNull(clock, "clock must not be null");
+        this.name = name;
         this.limit = limit;
         this.period = period;
         this.maxWait = maxWait;
@@ -72,16 +75,17 @@ public final class RateLimiter<T> implements Resilient<T> {
      * calls immediately ({@code maxWait} zero). Refine via {@code withX} methods, e.g.
      * {@link #withMaxWait} to let excess calls wait for the next window instead.
      */
-    public static <T> RateLimiter<T> of(int limit, Duration period) {
-        return new RateLimiter<>(limit, period, Duration.ZERO, List.of(), Clock.systemClock());
+    public static <T> RateLimiter<T> of(String name, int limit, Duration period) {
+        return new RateLimiter<>(name, limit, period, Duration.ZERO, List.of(),
+                Clock.systemClock());
     }
 
     public RateLimiter<T> withLimit(int limit) {
-        return new RateLimiter<>(limit, period, maxWait, listeners, clock);
+        return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
     public RateLimiter<T> withPeriod(Duration period) {
-        return new RateLimiter<>(limit, period, maxWait, listeners, clock);
+        return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
     /**
@@ -89,13 +93,13 @@ public final class RateLimiter<T> implements Resilient<T> {
      * Zero (the default) rejects immediately.
      */
     public RateLimiter<T> withMaxWait(Duration maxWait) {
-        return new RateLimiter<>(limit, period, maxWait, listeners, clock);
+        return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
     public RateLimiter<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
-        return new RateLimiter<>(limit, period, maxWait, newListeners, clock);
+        return new RateLimiter<>(name, limit, period, maxWait, newListeners, clock);
     }
 
     /**
@@ -103,7 +107,11 @@ public final class RateLimiter<T> implements Resilient<T> {
      * tests to make window and wait assertions deterministic and instant.
      */
     public RateLimiter<T> withClock(Clock clock) {
-        return new RateLimiter<>(limit, period, maxWait, listeners, clock);
+        return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
+    }
+
+    public String name() {
+        return name;
     }
 
     public int limit() {
