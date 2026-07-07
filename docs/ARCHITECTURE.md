@@ -88,6 +88,23 @@ ships and gets used regardless).
 
 ---
 
+## Exception classification: Transient vs. Permanent failures
+
+Patterns that can retry or recover from failures (Retry, CircuitBreaker) classify exceptions to avoid wasted
+retry attempts on permanent failures:
+
+- **Transient failures** (IO exceptions): network timeouts, connection resets, DNS failures, temporary service unavailability.
+  These failures *may* succeed on retry — retrying makes sense.
+- **Permanent failures** (logic errors): invalid arguments, null pointer dereferences, programming mistakes.
+  Retrying a permanent failure has no chance of success — it wastes time and delays failure reporting.
+
+By default, Retry only retries `IOException` and subclasses (the best proxy for transient infrastructure faults).
+Other exception types (e.g., `RuntimeException`, `NullPointerException`, `IllegalArgumentException`) are not retried
+unless explicitly configured via `withShouldRetry()`. This reduces noise and improves latency in failure paths:
+when an operation fails permanently, fail fast instead of burning retries.
+
+---
+
 ## Maven module strategy
 
 Multiple Maven modules with clear responsibilities, unified versioning (all share one release cycle and version

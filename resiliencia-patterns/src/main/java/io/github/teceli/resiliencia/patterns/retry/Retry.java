@@ -10,6 +10,7 @@ import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -52,10 +53,16 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
     /**
      * A {@code Retry} instance configured with sensible defaults, ready to use as-is
      * or refine further via {@code withX} methods.
+     *
+     * By default, retries only on {@code IOException} and its subclasses, which are assumed
+     * to be transient (network errors, timeouts, connection resets). Other exceptions are
+     * treated as permanent failures. To customize, use {@link #withShouldRetry(Predicate)}.
      */
     public static <T> Retry<T> create() {
         return new Retry<>(DEFAULT_MAX_ATTEMPTS, DEFAULT_INITIAL_DELAY_MS, DEFAULT_BACKOFF_MULTIPLIER,
-                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR, e -> true, List.of(), Clock.systemClock());
+                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR,
+            IOException.class::isInstance,
+                List.of(), Clock.systemClock());
     }
 
     public Retry<T> withMaxAttempts(int maxAttempts) {
@@ -146,7 +153,6 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      * The attempt count is needed by {@link #call} to build a {@link RetryExhaustedException}.
      */
     private ExecutionResult<T> execute(Operation<T> operation) {
-        Throwable lastError = null;
         long delayMs = initialDelayMs;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -155,7 +161,6 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                 emit(new RetryEvent.Success(clock.instant(), attempt));
                 return new ExecutionResult<>(new Outcome.Success<>(result), attempt);
             } catch (Exception e) {
-                lastError = e;
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
                 if (attempt < maxAttempts && shouldRetry.test(e)) {
@@ -174,7 +179,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             }
         }
 
-        return new ExecutionResult<>(new Outcome.Failure<>(lastError), maxAttempts);
+        throw new AssertionError("Loop must always return");
     }
 
     private record ExecutionResult<T>(Outcome<T> outcome, int attempts) {}

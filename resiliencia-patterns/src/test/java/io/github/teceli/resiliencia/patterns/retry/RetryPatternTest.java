@@ -33,7 +33,8 @@ class RetryPatternTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var result = retry.call(() -> {
             var value = counter.incrementAndGet();
@@ -53,7 +54,8 @@ class RetryPatternTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var exception = assertThrows(RetryExhaustedException.class, () -> retry.call(() -> {
             counter.incrementAndGet();
@@ -78,7 +80,8 @@ class RetryPatternTest {
                     if (event instanceof RetryEvent re) {
                         events.add(re);
                     }
-                });
+                })
+                .withShouldRetry(e -> true);
 
         retry.call(() -> {
             var value = counter.incrementAndGet();
@@ -99,7 +102,8 @@ class RetryPatternTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var outcome = retry.outcome(() -> {
             var value = counter.incrementAndGet();
@@ -118,7 +122,8 @@ class RetryPatternTest {
     void should_returnFailureWithOriginalCause_when_usingOutcomeMethod() {
         var retry = Retry.<String>create()
                 .withMaxAttempts(2)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var cause = new RuntimeException("Always fails");
         var outcome = retry.outcome(() -> {
@@ -138,7 +143,8 @@ class RetryPatternTest {
         var retry = Retry.<String>create()
                 .withMaxAttempts(4)
                 .withInitialDelay(10)
-                .withBackoffMultiplier(2.0);
+                .withBackoffMultiplier(2.0)
+                .withShouldRetry(e -> true);
 
         try {
             retry.call(() -> {
@@ -169,6 +175,7 @@ class RetryPatternTest {
                 .withInitialDelay(100)
                 .withBackoffMultiplier(10.0)
                 .withMaxDelay(250)
+                .withShouldRetry(e -> true)
                 .withClock(clock);
 
         retry.outcome(() -> {
@@ -185,6 +192,7 @@ class RetryPatternTest {
                 .withMaxAttempts(2)
                 .withInitialDelay(1_000)
                 .withJitter(0.5)
+                .withShouldRetry(e -> true)
                 .withClock(clock);
 
         retry.outcome(() -> {
@@ -203,6 +211,7 @@ class RetryPatternTest {
                 .withInitialDelay(100)
                 .withJitter(1.0)
                 .withMaxDelay(100)
+                .withShouldRetry(e -> true)
                 .withClock(clock);
 
         retry.outcome(() -> {
@@ -239,6 +248,7 @@ class RetryPatternTest {
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
+                .withShouldRetry(e -> true)
                 .withClock(new InterruptingClock());
 
         var outcome = retry.outcome(() -> {

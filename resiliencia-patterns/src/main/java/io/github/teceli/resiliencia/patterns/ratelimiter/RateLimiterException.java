@@ -14,16 +14,25 @@ public final class RateLimiterException extends ResilienciaException {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    private final String name;
     private final int limit;
     private final Duration period;
     private final Duration maxWait;
 
-    public RateLimiterException(int limit, Duration period, Duration maxWait) {
-        super("Rate limit exceeded: " + limit + " calls per " + period
+    public RateLimiterException(String name, int limit, Duration period, Duration maxWait) {
+        super("Rate limiter '" + name + "' exceeded: " + limit + " calls per " + period
                 + (maxWait.isZero() ? "" : ", no permit would become available within " + maxWait));
+        this.name = name;
         this.limit = limit;
         this.period = period;
         this.maxWait = maxWait;
+    }
+
+    /**
+     * The rate limiter instance name.
+     */
+    public String name() {
+        return name;
     }
 
     /**

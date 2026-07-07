@@ -40,14 +40,16 @@ public class RetryExample {
     }
 
     static void exampleSuccessAfterRetry() {
-        log.info("Example 1: Success after retry");
+        log.info("Example 1: Success after retry (with custom predicate)");
 
         var counter = new Object() { int value = 0; };
 
+        // Default Retry only retries IOException; for other exceptions, use withShouldRetry
         var retry = Retry.<String>create()
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
-                .withBackoffMultiplier(BACKOFF_MULTIPLIER);
+                .withBackoffMultiplier(BACKOFF_MULTIPLIER)
+                .withShouldRetry(e -> true);  // Retry all exceptions for this example
 
         var policy = Policy.compose(retry);
 
@@ -73,7 +75,8 @@ public class RetryExample {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(MAX_ATTEMPTS)
-                .withInitialDelay(INITIAL_DELAY_MS);
+                .withInitialDelay(INITIAL_DELAY_MS)
+                .withShouldRetry(e -> true);  // Retry all exceptions for this example
 
         var policy = Policy.compose(retry);
 
@@ -97,6 +100,7 @@ public class RetryExample {
         var retry = Retry.<String>create()
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
+                .withShouldRetry(e -> true)  // Retry all exceptions for this example
                 .withListener(event -> {
                     switch (event) {
                         case RetryEvent.AttemptFailed attempt ->

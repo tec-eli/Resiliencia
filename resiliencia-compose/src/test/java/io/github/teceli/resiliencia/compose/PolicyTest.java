@@ -26,7 +26,8 @@ class PolicyTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
 
@@ -46,7 +47,8 @@ class PolicyTest {
     void should_throwException_when_policyFails() {
         var retry = Retry.<String>create()
                 .withMaxAttempts(2)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
 
@@ -61,7 +63,8 @@ class PolicyTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
 
@@ -84,7 +87,8 @@ class PolicyTest {
 
         var retry = Retry.<String>create()
                 .withMaxAttempts(2)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
 
@@ -112,7 +116,8 @@ class PolicyTest {
                     } else if (event instanceof RetryEvent.Success) {
                         events.add("success");
                     }
-                });
+                })
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
         var counter = new AtomicInteger(0);
@@ -161,7 +166,8 @@ class PolicyTest {
     void should_throwOriginalExceptionType_when_composedPatternFails() {
         var retry = Retry.<String>create()
                 .withMaxAttempts(2)
-                .withInitialDelay(10);
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true);
 
         var policy = Policy.compose(retry);
 

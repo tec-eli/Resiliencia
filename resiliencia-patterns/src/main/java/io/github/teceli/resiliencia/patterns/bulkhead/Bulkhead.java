@@ -145,18 +145,18 @@ public final class Bulkhead<T> implements Resilient<T> {
         }
 
         if (!acquired) {
-            emit(new BulkheadEvent.Rejected(clock.instant(), maxConcurrentCalls, maxWait));
-            return new Outcome.Failure<>(new BulkheadFullException(maxConcurrentCalls, maxWait));
+            emit(new BulkheadEvent.Rejected(clock.instant(), name, maxConcurrentCalls, maxWait));
+            return new Outcome.Failure<>(new BulkheadFullException(name, maxConcurrentCalls, maxWait));
         }
 
-        emit(new BulkheadEvent.Permitted(clock.instant(), activeCalls()));
+        emit(new BulkheadEvent.Permitted(clock.instant(), name, activeCalls()));
         try {
             return new Outcome.Success<>(operation.execute());
         } catch (Exception e) {
             return new Outcome.Failure<>(e);
         } finally {
             permits.release();
-            emit(new BulkheadEvent.Finished(clock.instant(), activeCalls()));
+            emit(new BulkheadEvent.Finished(clock.instant(), name, activeCalls()));
         }
     }
 

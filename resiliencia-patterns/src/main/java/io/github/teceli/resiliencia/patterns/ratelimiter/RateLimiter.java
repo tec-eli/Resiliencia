@@ -161,11 +161,11 @@ public final class RateLimiter<T> implements Resilient<T> {
         }
 
         if (!acquireOutcome.acquired()) {
-            emit(new RateLimiterEvent.Rejected(clock.instant(), acquireOutcome.estimatedWait()));
-            return new Outcome.Failure<>(new RateLimiterException(limit, period, maxWait));
+            emit(new RateLimiterEvent.Rejected(clock.instant(), name, acquireOutcome.estimatedWait()));
+            return new Outcome.Failure<>(new RateLimiterException(name, limit, period, maxWait));
         }
 
-        emit(new RateLimiterEvent.Permitted(clock.instant(), acquireOutcome.remainingPermits()));
+        emit(new RateLimiterEvent.Permitted(clock.instant(), name, acquireOutcome.remainingPermits()));
         try {
             return new Outcome.Success<>(operation.execute());
         } catch (Exception e) {

@@ -14,14 +14,23 @@ public final class BulkheadFullException extends ResilienciaException {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    private final String name;
     private final int maxConcurrentCalls;
     private final Duration maxWait;
 
-    public BulkheadFullException(int maxConcurrentCalls, Duration maxWait) {
-        super("Bulkhead is full: " + maxConcurrentCalls + " concurrent calls in flight"
+    public BulkheadFullException(String name, int maxConcurrentCalls, Duration maxWait) {
+        super("Bulkhead '" + name + "' is full: " + maxConcurrentCalls + " concurrent calls in flight"
                 + (maxWait.isZero() ? "" : ", no permit became available within " + maxWait));
+        this.name = name;
         this.maxConcurrentCalls = maxConcurrentCalls;
         this.maxWait = maxWait;
+    }
+
+    /**
+     * The bulkhead instance name.
+     */
+    public String name() {
+        return name;
     }
 
     /**

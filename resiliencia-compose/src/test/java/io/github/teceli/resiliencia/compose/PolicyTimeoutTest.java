@@ -44,7 +44,7 @@ class PolicyTimeoutTest {
     void should_retryAfterPerAttemptTimeout_when_retryWrapsTimeout() {
         var attempts = new AtomicInteger(0);
 
-        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10);
+        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
         var timeout = Timeout.<String>of(Duration.ofMillis(100));
         var policy = Policy.compose(retry).and(timeout);
 
@@ -63,7 +63,7 @@ class PolicyTimeoutTest {
     void should_exhaustRetries_when_everyAttemptTimesOut() {
         var attempts = new AtomicInteger(0);
 
-        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
+        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10).withShouldRetry(e -> true);
         var timeout = Timeout.<String>of(Duration.ofMillis(50));
         var policy = Policy.compose(retry).and(timeout);
 
@@ -80,7 +80,7 @@ class PolicyTimeoutTest {
     void should_interruptOperationThroughChain_when_asyncCallCancelled() throws Exception {
         var operationStarted = new CountDownLatch(1);
         var operationInterrupted = new CountDownLatch(1);
-        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10);
+        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
         var timeout = Timeout.<String>of(Duration.ofSeconds(30));
         var policy = Policy.compose(retry).and(timeout);
 

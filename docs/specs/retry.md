@@ -15,6 +15,16 @@ and after jitter is applied — preventing unbounded exponential growth. Neither
 other: an initial delay above the cap is clamped, not rejected. If the operation succeeds on any attempt, the result is returned normally. If all attempts
 are exhausted, a `RetryExhaustedException` is thrown carrying the total attempt count and the last exception.
 
+### Exception classification: Transient vs. Permanent failures
+
+**By default**, Retry only retries on `IOException` and its subclasses, which are assumed to be transient:
+network timeouts, connection resets, DNS failures, and similar infrastructure faults. Other exception types
+(e.g., `RuntimeException`, `NullPointerException`) are assumed to be permanent (logic errors, bugs) and are not retried.
+
+This classification reduces wasted retry attempts: retrying a permanent failure (e.g., invalid argument) has no
+chance of success and delays failure reporting. For operations where non-IOExceptions are transient (e.g., a custom
+`TemporaryServiceException`), override the default predicate via `withShouldRetry()`.
+
 Retry is configured via `Retry.<T>create()` followed by `withX` copy methods (each returns a new, independently
 usable `Retry` instance rather than mutating the receiver):
 
@@ -22,8 +32,12 @@ usable `Retry` instance rather than mutating the receiver):
 var retry = Retry.<String>create()
         .withMaxAttempts(3)
         .withInitialDelay(100)
-        .withBackoffMultiplier(2.0)
-        .withShouldRetry(e -> e instanceof IOException);
+        .withBackoffMultiplier(2.0);
+        // Uses default: retries only IOException
+
+var customRetry = Retry.<String>create()
+        .withMaxAttempts(3)
+        .withShouldRetry(e -> e instanceof IOException || e instanceof CustomTemporaryException);
 ```
 
 There is no result-based retry (retrying because the returned value matches a predicate) and no separate
@@ -40,7 +54,7 @@ There is no result-based retry (retrying because the returned value matches a pr
 | `backoffMultiplier` | no | Factor the delay is multiplied by after each attempt. Must be >= 1.0 | 2.0 |
 | `maxDelayMs` | no | Hard cap on every backoff delay, applied after jitter. Must be >= 0 | uncapped |
 | `jitterFactor` | no | Uniform randomization of each delay within `±factor`. Must be in [0.0, 1.0] | 0.0 (off) |
-| `shouldRetry` | no | Predicate — retry only if it returns true for the thrown exception | `e -> true` |
+| `shouldRetry` | no | Predicate — retry only if it returns true for the thrown exception | `e -> e instanceof IOException` |
 | `listeners` | no | `ResilienceEvent.Listener` instances notified of each `RetryEvent` | none |
 
 ---

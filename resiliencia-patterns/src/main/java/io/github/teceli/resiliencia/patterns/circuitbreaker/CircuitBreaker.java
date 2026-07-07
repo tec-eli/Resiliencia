@@ -347,7 +347,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         var slot = current.get();
         switch (slot.publicState) {
             case CircuitState.Closed closed -> evaluateFailureThresholds(slot);
-            case CircuitState.HalfOpen halfOpen -> evaluateHalfOpenOutcome(slot, failed, slow);
+            case CircuitState.HalfOpen halfOpen -> evaluateHalfOpenOutcome(slot, failed);
             case CircuitState.Open open -> { /* another thread already opened it; nothing to do */ }
         }
     }
@@ -372,7 +372,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * HalfOpen ignores the sliding window entirely: any failed test call reopens the circuit
      * immediately, and it closes only once every permitted test call has succeeded.
      */
-    private void evaluateHalfOpenOutcome(StateSlot slot, boolean failed, boolean slow) {
+    private void evaluateHalfOpenOutcome(StateSlot slot, boolean failed) {
         if (failed) {
             open(slot, CircuitBreakerEvent.Reason.FAILURE_RATE_EXCEEDED);
             return;

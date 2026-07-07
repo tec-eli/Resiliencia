@@ -56,6 +56,7 @@ class ManualClockTest {
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
                 .withInitialDelay(60_000)
+                .withShouldRetry(e -> true)
                 .withClock(clock);
 
         var result = retry.call(() -> {

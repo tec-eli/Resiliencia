@@ -14,7 +14,7 @@ public sealed interface RateLimiterEvent extends ResilienceEvent {
         return "rate-limiter";
     }
 
-    record Permitted(Instant timestamp, int remainingPermits) implements RateLimiterEvent {}
+    record Permitted(Instant timestamp, String name, int remainingPermits) implements RateLimiterEvent {}
 
-    record Rejected(Instant timestamp, Duration estimatedWait) implements RateLimiterEvent {}
+    record Rejected(Instant timestamp, String name, Duration estimatedWait) implements RateLimiterEvent {}
 }
