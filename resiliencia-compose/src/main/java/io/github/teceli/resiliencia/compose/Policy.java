@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * Fluent composition of multiple resilience patterns.
@@ -31,28 +32,72 @@ public final class Policy<T> implements Resilient<T> {
      * A known-bad ordering of two pattern kinds: {@code outer} sitting anywhere further out in
      * the chain than {@code inner} — not necessarily adjacent, other patterns may sit between
      * them. ERROR rules reject construction with {@link InvalidPolicyException}; WARN rules log
-     * and let construction proceed.
+     * and let construction proceed, unless {@code suppressWhen} matches the pattern instance
+     * being added (e.g. a Retry that already bounds its own total duration).
      *
-     * Extension point: to flag a new ordering (e.g. future Bulkhead or RateLimiter rules), add
-     * an entry to {@link #ORDERING_RULES}; no other code needs to change.
+     * Extension point: to flag a new ordering, add an entry to {@link #ORDERING_RULES}; no other
+     * code needs to change.
      */
     private record OrderingRule(PatternKind outer, PatternKind inner, Severity severity,
-                                String problem, String suggestedFix) {
+                                String problem, String suggestedFix, Predicate<Resilient<?>> suppressWhen) {
         enum Severity { ERROR, WARN }
     }
+
+    private static final Predicate<Resilient<?>> NEVER_SUPPRESS = pattern -> false;
 
     private static final List<OrderingRule> ORDERING_RULES = List.of(
             new OrderingRule(PatternKind.RETRY, PatternKind.CIRCUIT_BREAKER, OrderingRule.Severity.ERROR,
                     "Retry wraps CircuitBreaker: the retry loop would burn its attempt budget against an "
                             + "already-open circuit, which fails fast on every attempt — no legitimate use case",
                     "Compose CircuitBreaker before Retry so the circuit is checked outside the retry loop, "
-                            + "e.g. Policy.compose(circuitBreaker).and(retry), or use Policy.useOptimumOrder(...)"),
+                            + "e.g. Policy.compose(circuitBreaker).and(retry), or use Policy.useOptimumOrder(...)",
+                    NEVER_SUPPRESS),
             new OrderingRule(PatternKind.TIMEOUT, PatternKind.RETRY, OrderingRule.Severity.WARN,
                     "Timeout wraps Retry: this ordering is valid for a per-attempt timeout, which is what the "
                             + "library implements today, but may be a mistake if an overall deadline across the "
-                            + "whole retry loop was intended instead (not modeled yet)",
+                            + "whole retry loop was intended instead",
                     "If a per-attempt timeout was intended, prefer composing Retry before Timeout, "
-                            + "e.g. Policy.compose(retry).and(timeout), or use Policy.useOptimumOrder(...)"));
+                            + "e.g. Policy.compose(retry).and(timeout), or use Policy.useOptimumOrder(...). If an "
+                            + "overall deadline was intended, configure Retry.withOverallDeadline(...) instead, "
+                            + "which suppresses this warning",
+                    Resilient::hasOwnDeadline),
+            new OrderingRule(PatternKind.BULKHEAD, PatternKind.CIRCUIT_BREAKER, OrderingRule.Severity.ERROR,
+                    "Bulkhead wraps CircuitBreaker: a permit is reserved before the circuit state is known, "
+                            + "wasting bulkhead capacity on a call that fails immediately once the circuit check "
+                            + "runs — no legitimate use case",
+                    "Compose CircuitBreaker before Bulkhead so the circuit is checked before a permit is "
+                            + "reserved, e.g. Policy.compose(circuitBreaker).and(bulkhead), or use "
+                            + "Policy.useOptimumOrder(...)",
+                    NEVER_SUPPRESS),
+            new OrderingRule(PatternKind.BULKHEAD, PatternKind.RATE_LIMITER, OrderingRule.Severity.ERROR,
+                    "Bulkhead wraps RateLimiter: a permit is reserved before the rate limit is checked, "
+                            + "wasting bulkhead capacity on a call that gets rejected once the rate-limit check "
+                            + "runs — no legitimate use case",
+                    "Compose RateLimiter before Bulkhead so the rate limit is checked before a permit is "
+                            + "reserved, e.g. Policy.compose(rateLimiter).and(bulkhead), or use "
+                            + "Policy.useOptimumOrder(...)",
+                    NEVER_SUPPRESS),
+            new OrderingRule(PatternKind.RETRY, PatternKind.RATE_LIMITER, OrderingRule.Severity.WARN,
+                    "Retry wraps RateLimiter: each attempt is independently subject to the rate limit instead "
+                            + "of the whole call being gated once, outermost. Legitimate when the limiter exists "
+                            + "to bound the rate of outbound calls per attempt. Note: Retry's default "
+                            + "shouldRetry only matches IOException — it will not retry a RateLimiterException "
+                            + "unless shouldRetry is extended to cover it",
+                    "If the limiter is meant to gate the whole call once, prefer composing RateLimiter before "
+                            + "Retry, e.g. Policy.compose(rateLimiter).and(retry), or use "
+                            + "Policy.useOptimumOrder(...). If this per-attempt ordering is intended, extend "
+                            + "shouldRetry to also match RateLimiterException",
+                    NEVER_SUPPRESS),
+            new OrderingRule(PatternKind.RETRY, PatternKind.BULKHEAD, OrderingRule.Severity.WARN,
+                    "Retry wraps Bulkhead: the permit is re-acquired per attempt instead of held for the whole "
+                            + "retry loop. Legitimate when the intent is to avoid monopolizing a permit during "
+                            + "backoff waits. Note: Retry's default shouldRetry only matches IOException — it "
+                            + "will not retry a BulkheadFullException unless shouldRetry is extended to cover it",
+                    "If one permit should be held for the whole retry loop, prefer composing Bulkhead before "
+                            + "Retry, e.g. Policy.compose(bulkhead).and(retry), or use Policy.useOptimumOrder(...). "
+                            + "If this per-attempt ordering is intended, extend shouldRetry to also match "
+                            + "BulkheadFullException",
+                    NEVER_SUPPRESS));
 
     private final List<Resilient<T>> patterns;
 
@@ -146,9 +191,10 @@ public final class Policy<T> implements Resilient<T> {
         for (var rule : ORDERING_RULES) {
             if (rule.inner() == newPattern.patternKind() &&
                 outerPatterns.stream().anyMatch(outer -> outer.patternKind() == rule.outer())) {
-                switch (rule.severity()) {
-                    case ERROR -> throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
-                    case WARN -> log.warn("{}. {}.", rule.problem(), rule.suggestedFix());
+                if (rule.severity() == OrderingRule.Severity.ERROR) {
+                    throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
+                } else if (rule.severity() == OrderingRule.Severity.WARN && !rule.suppressWhen().test(newPattern)) {
+                    log.warn("{}. {}.", rule.problem(), rule.suggestedFix());
                 }
             }
         }

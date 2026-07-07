@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -26,7 +28,7 @@ import java.util.function.Predicate;
  * usable {@code Retry} instance rather than mutating this one.
  */
 public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMultiplier,
-                        long maxDelayMs, double jitterFactor,
+                        long maxDelayMs, double jitterFactor, long overallDeadlineMs,
                         Predicate<Throwable> shouldRetry, List<ResilienceEvent.Listener> listeners, Clock clock)
         implements Resilient<T> {
 
@@ -36,6 +38,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
     private static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
     private static final long DEFAULT_MAX_DELAY_MS = Long.MAX_VALUE;
     private static final double DEFAULT_JITTER_FACTOR = 0.0;
+    private static final long DEFAULT_OVERALL_DEADLINE_MS = Long.MAX_VALUE;
 
     public Retry {
         if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be >= 1");
@@ -45,6 +48,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         if (jitterFactor < 0.0 || jitterFactor > 1.0) {
             throw new IllegalArgumentException("jitterFactor must be between 0.0 and 1.0");
         }
+        if (overallDeadlineMs < 0) throw new IllegalArgumentException("overallDeadline must be >= 0");
         Objects.requireNonNull(shouldRetry, "shouldRetry must not be null");
         Objects.requireNonNull(clock, "clock must not be null");
         listeners = List.copyOf(listeners);
@@ -60,24 +64,24 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      */
     public static <T> Retry<T> create() {
         return new Retry<>(DEFAULT_MAX_ATTEMPTS, DEFAULT_INITIAL_DELAY_MS, DEFAULT_BACKOFF_MULTIPLIER,
-                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR,
+                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR, DEFAULT_OVERALL_DEADLINE_MS,
             IOException.class::isInstance,
                 List.of(), Clock.systemClock());
     }
 
     public Retry<T> withMaxAttempts(int maxAttempts) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     public Retry<T> withInitialDelay(long delayMs) {
         return new Retry<>(maxAttempts, delayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     public Retry<T> withBackoffMultiplier(double multiplier) {
         return new Retry<>(maxAttempts, initialDelayMs, multiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     /**
@@ -86,7 +90,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      */
     public Retry<T> withMaxDelay(long maxDelayMs) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     /**
@@ -96,19 +100,32 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      */
     public Retry<T> withJitter(double jitterFactor) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
+    }
+
+    /**
+     * Bound the total wall-clock time this retry loop is willing to spend across all attempts and
+     * backoff waits, measured from the first attempt. Checked only between attempts — never
+     * preempts an attempt already in progress, which stays Timeout's responsibility. Once the
+     * deadline has passed, the loop stops as if the attempt budget were exhausted (emits
+     * {@link RetryEvent.Exhausted} and throws {@link RetryExhaustedException}), even if
+     * {@code maxAttempts} has not been reached yet. Disabled (uncapped) by default.
+     */
+    public Retry<T> withOverallDeadline(long overallDeadlineMs) {
+        return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     public Retry<T> withShouldRetry(Predicate<Throwable> predicate) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                predicate, listeners, clock);
+                overallDeadlineMs, predicate, listeners, clock);
     }
 
     public Retry<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, newListeners, clock);
+                overallDeadlineMs, shouldRetry, newListeners, clock);
     }
 
     /**
@@ -117,7 +134,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      */
     public Retry<T> withClock(Clock clock) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                shouldRetry, listeners, clock);
+                overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
     @Override
@@ -130,6 +147,15 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         return PatternKind.RETRY;
     }
 
+    /**
+     * True once {@link #withOverallDeadline(long)} has been configured with a finite bound,
+     * telling Policy this Retry already caps its own total duration.
+     */
+    @Override
+    public boolean hasOwnDeadline() {
+        return overallDeadlineMs != DEFAULT_OVERALL_DEADLINE_MS;
+    }
+
     @Override
     public T call(Operation<T> operation) throws ResilienciaException {
         var result = execute(operation);
@@ -137,9 +163,13 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             case Outcome.Success<T>(T value) -> value;
             // execute() never produces TimedOut (an inner Timeout pattern surfaces as a Failure
             // cause instead); the case exists only for exhaustiveness over the sealed Outcome.
-            case Outcome.TimedOut<T> timedOut -> throw new ResilienciaTimeoutException(timedOut.timeout());
-            case Outcome.Failure<T>(Throwable cause) ->
-            throw new RetryExhaustedException(result.attempts(), cause);
+            case Outcome.TimedOut<T>(Duration timeout) -> throw new ResilienciaTimeoutException(timeout);
+            case Outcome.Failure<T>(Throwable cause) -> {
+                if (result.rejected()) {
+                    throw new RetryRejectedException(result.attempts(), cause);
+                }
+                throw new RetryExhaustedException(result.attempts(), cause);
+            }
         };
     }
 
@@ -150,31 +180,34 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
 
     /**
      * Runs the retry loop once, returning both the outcome and the number of attempts made.
-     * The attempt count is needed by {@link #call} to build a {@link RetryExhaustedException}.
+     * The attempt count is needed by {@link #call} to build a {@link RetryExhaustedException} or
+     * {@link RetryRejectedException}; {@code rejected} tells {@link #call} which of the two applies.
      */
     private ExecutionResult<T> execute(Operation<T> operation) {
         long delayMs = initialDelayMs;
+        var startInstant = clock.instant();
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 var result = operation.execute();
                 emit(new RetryEvent.Success(clock.instant(), attempt));
-                return new ExecutionResult<>(new Outcome.Success<>(result), attempt);
+                return new ExecutionResult<>(new Outcome.Success<>(result), attempt, false);
             } catch (Exception e) {
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
-                if (attempt < maxAttempts && shouldRetry.test(e)) {
+                if (attempt < maxAttempts && shouldRetry.test(e) && !deadlineExceeded(startInstant)) {
                     try {
                         sleep(Math.min(applyJitter(delayMs), maxDelayMs));
                     } catch (ResilienciaException interrupted) {
-                        return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt);
+                        return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt, false);
                     }
                     delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
-                } else if (attempt == maxAttempts) {
+                } else if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
                     emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt);
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, false);
                 } else {
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt);
+                    emit(new RetryEvent.Rejected(clock.instant(), attempt, e));
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, true);
                 }
             }
         }
@@ -182,7 +215,18 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         throw new AssertionError("Loop must always return");
     }
 
-    private record ExecutionResult<T>(Outcome<T> outcome, int attempts) {}
+    /**
+     * Whether {@link #overallDeadlineMs} (if configured) has already elapsed since the first
+     * attempt. Always false when the deadline is disabled (the default).
+     */
+    private boolean deadlineExceeded(Instant startInstant) {
+        if (overallDeadlineMs == DEFAULT_OVERALL_DEADLINE_MS) {
+            return false;
+        }
+        return !clock.instant().isBefore(startInstant.plusMillis(overallDeadlineMs));
+    }
+
+    private record ExecutionResult<T>(Outcome<T> outcome, int attempts, boolean rejected) {}
 
     /**
      * Shifts the delay by a uniformly random offset in {@code [-delay * jitterFactor, +delay * jitterFactor]}.

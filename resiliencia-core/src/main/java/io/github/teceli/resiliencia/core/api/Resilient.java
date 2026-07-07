@@ -69,6 +69,15 @@ public interface Resilient<T> {
         return PatternKind.CUSTOM;
     }
 
+    /**
+     * Whether this pattern already enforces its own upper bound on total duration, independent
+     * of any outer Timeout. Used by Policy to decide whether a Timeout-wraps-Retry ordering
+     * warning still applies. Defaults to false for user-defined Resilient implementations.
+     */
+    default boolean hasOwnDeadline() {
+        return false;
+    }
+
     @FunctionalInterface
     interface Operation<T> {
         T execute() throws ResilienciaException;

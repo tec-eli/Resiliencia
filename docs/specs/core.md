@@ -22,6 +22,11 @@ composition order at construction time (see `policy.md`). It is distinct from th
 `ResilienceEvent.patternName(): String` — `patternKind()` exists for compile-time-safe internal control flow, not
 for external reporting.
 
+`Resilient<T>` also exposes `boolean hasOwnDeadline()`, defaulting to `false`. It tells `Policy` whether this
+pattern instance already enforces its own upper bound on total duration, independent of any outer `Timeout` —
+`Retry` overrides it to report whether an overall deadline has been configured (see `retry.md`). Like
+`patternKind()`, this exists for internal ordering-validation control flow, not for external reporting.
+
 ---
 
 ## Outcome
@@ -46,6 +51,7 @@ context as typed fields — not just a message string.
 | Exception | Thrown by | Key fields |
 |---|---|---|
 | `RetryExhaustedException` | Retry | attempt count, last cause |
+| `RetryRejectedException` | Retry | attempt count, last cause |
 | `ResilienciaTimeoutException` | Timeout | configured limit, actual elapsed |
 | `CircuitBreakerOpenException` | CircuitBreaker | name, open since, remaining wait |
 | `BulkheadFullException` | Bulkhead | name, max concurrent calls |
