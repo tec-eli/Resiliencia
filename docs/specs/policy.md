@@ -58,7 +58,12 @@ RateLimiter → CircuitBreaker → Bulkhead → Retry → Timeout
 - **RateLimiter outermost** — rejects excess load before any other pattern spends work on it
 - **CircuitBreaker before Bulkhead and Retry** — an open circuit should short-circuit before a permit is reserved or a retry loop starts
 - **Bulkhead before Retry** — one permit is held for the whole retry loop, not re-acquired per attempt
-- **Retry before Timeout** — Timeout is per-attempt, so it must sit on the innermost layer to apply to each attempt individually
+- **Retry before Timeout** — Timeout is per-attempt, so it must sit on the innermost layer to apply to each attempt
+  individually. **This does not happen automatically with `Retry.create()`'s defaults**: the default `shouldRetry`
+  only matches `IOException`, and `Timeout` throws `ResilienciaTimeoutException`, which isn't one. Retrying a
+  per-attempt timeout requires extending `shouldRetry` to cover `ResilienciaTimeoutException` explicitly (see
+  `retry.md`'s "Exception classification" section) — this ordering makes that retry *possible*, it doesn't make it
+  happen by itself.
 
 `Policy.useOptimumOrder(...)` applies this order without requiring the user to chain `.and()` manually. It produces
 the same `Policy` type as explicit composition — this is a shortcut, not a new builder.
@@ -72,10 +77,13 @@ protection. This keeps `Policy` free of special cases outside the ordered patter
 
 When an overall deadline is configured on Retry, the Timeout-wrapping-Retry `WARN` (above) does not fire: the user
 has explicitly acknowledged the total-duration concern, so the per-attempt-only reading of Timeout is no longer an
-oversight to flag.
+oversight to flag. Concretely, `Resilient<T>` exposes `hasOwnDeadline()` (default `false`); `Retry` overrides it to
+report whether `withOverallDeadline(...)` has been configured, and `Policy`'s ordering validation checks it before
+logging the Timeout-wraps-Retry warning — no `instanceof` needed, the same polymorphic mechanism `patternKind()`
+already uses for structural checks.
 
-This does not introduce a new `PatternKind` or touch order validation — it's orthogonal to both. The field itself
-is specified in `retry.md`, not here; implementation is not scheduled yet.
+This does not introduce a new `PatternKind` or touch order validation's structural rules — it's orthogonal to both,
+only adding a suppression condition to one existing `WARN` rule. The field itself is specified in `retry.md`.
 
 ---
 
@@ -126,8 +134,6 @@ So: hard failure for pairings with no legitimate use, a warning for pairings tha
 
 ### Open
 
-- No new `PatternKind` values are needed for the Bulkhead/RateLimiter pairs above — they reuse the existing enum.
-- Implementation of the new order-validation pairs and of Retry's overall-deadline field is not scheduled yet.
-- As of this writing, only 2 of the 6 ordering rules above are implemented in `Policy`: Retry-wraps-CircuitBreaker
-  (ERROR) and Timeout-wraps-Retry (WARN). Bulkhead-wraps-CircuitBreaker, Bulkhead-wraps-RateLimiter,
-  Retry-wraps-RateLimiter, and Retry-wraps-Bulkhead are specified here but not yet added to `ORDERING_RULES`.
+- No new `PatternKind` values were needed for the Bulkhead/RateLimiter pairs above — they reuse the existing enum.
+- All 6 ordering rules in the table above are implemented in `Policy.ORDERING_RULES`, and Retry's overall-deadline
+  field (`withOverallDeadline(...)`, `hasOwnDeadline()`) is implemented — see `retry.md`.

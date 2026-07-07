@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -33,15 +32,14 @@ class PolicyOrderValidationTest {
 
         var composedPolicy = Policy.compose(retry);
 
-        assertThatExceptionOfType(InvalidPolicyException.class)
-            .isThrownBy(() -> composedPolicy.and(circuitBreaker))
-            .withMessageContaining("Retry")
-            .withMessageContaining("CircuitBreaker")
-            .satisfies(exception ->
-                assertThat(exception.suggestedFix())
-                    .asString()
-                    .contains("CircuitBreaker before Retry")
-            );
+        var exception = assertThrows(InvalidPolicyException.class,
+            () -> composedPolicy.and(circuitBreaker));
+
+        assertThat(exception.getMessage())
+            .contains("Retry")
+            .contains("CircuitBreaker");
+        assertThat(exception.suggestedFix())
+            .contains("CircuitBreaker before Retry");
     }
 
     @Test
@@ -63,8 +61,15 @@ class PolicyOrderValidationTest {
         var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
-        assertThatExceptionOfType(InvalidPolicyException.class)
-            .isThrownBy(() -> Policy.compose(retry).and(circuitBreaker));
+
+        var exception = assertThrows(InvalidPolicyException.class,
+            () -> Policy.compose(retry).and(circuitBreaker));
+
+        assertThat(exception.getMessage())
+            .contains("Retry")
+            .contains("CircuitBreaker");
+        assertThat(exception.suggestedFix())
+            .contains("CircuitBreaker before Retry");
     }
 
     @Test
@@ -78,6 +83,78 @@ class PolicyOrderValidationTest {
         assertThat(stderr)
                 .contains("WARN")
                 .contains("Timeout wraps Retry");
+    }
+
+    @Test
+    void should_suppressTimeoutWrapsRetryWarn_when_retryHasOverallDeadline() {
+        var timeout = fakePattern(PatternKind.TIMEOUT);
+        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+                .withOverallDeadline(5_000);
+
+        var stderr = captureStdErr(() ->
+                assertThatNoException().isThrownBy(() -> Policy.compose(timeout).and(retryWithDeadline)));
+
+        assertThat(stderr).doesNotContain("WARN");
+    }
+
+    @Test
+    void should_throwInvalidPolicyException_when_bulkheadWrapsCircuitBreaker() {
+        var bulkhead = fakePattern(PatternKind.BULKHEAD);
+        var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
+
+        var composedPolicy = Policy.compose(bulkhead);
+
+        var exception = assertThrows(InvalidPolicyException.class,
+            () -> composedPolicy.and(circuitBreaker));
+
+        assertThat(exception.getMessage())
+            .contains("Bulkhead")
+            .contains("CircuitBreaker");
+        assertThat(exception.suggestedFix())
+            .contains("CircuitBreaker before Bulkhead");
+    }
+
+    @Test
+    void should_throwInvalidPolicyException_when_bulkheadWrapsRateLimiter() {
+        var bulkhead = fakePattern(PatternKind.BULKHEAD);
+        var rateLimiter = fakePattern(PatternKind.RATE_LIMITER);
+
+        var composedPolicy = Policy.compose(bulkhead);
+
+        var exception = assertThrows(InvalidPolicyException.class,
+            () -> composedPolicy.and(rateLimiter));
+
+        assertThat(exception.getMessage())
+            .contains("Bulkhead")
+            .contains("RateLimiter");
+        assertThat(exception.suggestedFix())
+            .contains("RateLimiter before Bulkhead");
+    }
+
+    @Test
+    void should_logWarnAndSucceed_when_retryWrapsRateLimiter() {
+        var retry = fakePattern(PatternKind.RETRY);
+        var rateLimiter = fakePattern(PatternKind.RATE_LIMITER);
+
+        var stderr = captureStdErr(() ->
+                assertThatNoException().isThrownBy(() -> Policy.compose(retry).and(rateLimiter)));
+
+        assertThat(stderr)
+                .contains("WARN")
+                .contains("Retry wraps RateLimiter");
+    }
+
+    @Test
+    void should_logWarnAndSucceed_when_retryWrapsBulkhead() {
+        var retry = fakePattern(PatternKind.RETRY);
+        var bulkhead = fakePattern(PatternKind.BULKHEAD);
+
+        var stderr = captureStdErr(() ->
+                assertThatNoException().isThrownBy(() -> Policy.compose(retry).and(bulkhead)));
+
+        assertThat(stderr)
+                .contains("WARN")
+                .contains("Retry wraps Bulkhead");
     }
 
     @Test
@@ -203,8 +280,8 @@ class PolicyOrderValidationTest {
     }
 
     /**
-     * Runs the action while System.err is redirected to a buffer and returns what was written.
-     * slf4j-simple (the test-scoped SLF4J provider) writes to System.err, resolved at write
+     * Runs the action while System.Err is redirected to a buffer and returns what was written.
+     * slf4j-simple (the test-scoped SLF4J provider) writes to System.Err, resolved at write
      * time, so WARN output from Policy lands in the buffer.
      */
     private static String captureStdErr(Runnable action) {

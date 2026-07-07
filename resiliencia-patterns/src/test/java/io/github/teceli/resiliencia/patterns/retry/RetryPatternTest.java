@@ -69,6 +69,84 @@ class RetryPatternTest {
     }
 
     @Test
+    void should_throwRetryRejectedException_when_shouldRetryDeclines() {
+        var counter = new AtomicInteger(0);
+
+        // Default shouldRetry only matches IOException, so a RuntimeException is rejected outright.
+        var retry = Retry.<String>create()
+                .withMaxAttempts(3)
+                .withInitialDelay(10);
+
+        var exception = assertThrows(RetryRejectedException.class, () -> retry.call(() -> {
+            counter.incrementAndGet();
+            throw new IllegalStateException("Not retryable");
+        }));
+        assertThat(exception)
+                .hasCauseInstanceOf(IllegalStateException.class);
+        assertThat(exception.attemptCount()).isEqualTo(1);
+
+        assertThat(counter.get()).isEqualTo(1);
+    }
+
+    @Test
+    void should_emitRejectedEvent_when_shouldRetryDeclines() {
+        var events = new ArrayList<RetryEvent>();
+
+        var retry = Retry.<String>create()
+                .withMaxAttempts(3)
+                .withInitialDelay(10)
+                .withListener(event -> {
+                    if (event instanceof RetryEvent re) {
+                        events.add(re);
+                    }
+                });
+
+        assertThrows(RetryRejectedException.class, () -> retry.call(() -> {
+            throw new IllegalStateException("Not retryable");
+        }));
+
+        assertThat(events).satisfiesExactly(
+                first -> assertThat(first).isInstanceOf(RetryEvent.AttemptFailed.class),
+                second -> assertThat(second).isInstanceOf(RetryEvent.Rejected.class));
+    }
+
+    @Test
+    void should_stopRetrying_when_overallDeadlineElapsed() {
+        var clock = new RecordingClock();
+        var events = new ArrayList<RetryEvent>();
+
+        var retry = Retry.<String>create()
+                .withMaxAttempts(5)
+                .withInitialDelay(100)
+                .withOverallDeadline(150)
+                .withShouldRetry(e -> true)
+                .withClock(clock)
+                .withListener(event -> {
+                    if (event instanceof RetryEvent re) {
+                        events.add(re);
+                    }
+                });
+
+        var exception = assertThrows(RetryExhaustedException.class, () -> retry.call(() -> {
+            throw new RuntimeException("Always fails");
+        }));
+
+        // attempt 1 (t=0, deadline not reached) -> sleep 100 -> attempt 2 (t=100, deadline not
+        // reached) -> sleep 200 -> attempt 3 (t=300, deadline of 150 elapsed) -> stop.
+        assertThat(exception.attemptCount()).isEqualTo(3);
+        assertThat(events).last().isInstanceOf(RetryEvent.Exhausted.class);
+    }
+
+    @Test
+    void should_reportHasOwnDeadline_when_overallDeadlineConfigured() {
+        var withDeadline = Retry.<String>create().withOverallDeadline(1_000);
+        var withoutDeadline = Retry.<String>create();
+
+        assertThat(withDeadline.hasOwnDeadline()).isTrue();
+        assertThat(withoutDeadline.hasOwnDeadline()).isFalse();
+    }
+
+    @Test
     void should_emitEvents_when_retryOccurs() {
         var counter = new AtomicInteger(0);
         var events = new ArrayList<RetryEvent>();
@@ -231,6 +309,12 @@ class RetryPatternTest {
             .isThrownBy(() -> Retry.<String>create().withJitter(1.1));
         assertThatIllegalArgumentException()
             .isThrownBy(() -> Retry.<String>create().withMaxDelay(-1));
+    }
+
+    @Test
+    void should_rejectNegativeOverallDeadline_when_configured() {
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withOverallDeadline(-1));
     }
 
     @Test

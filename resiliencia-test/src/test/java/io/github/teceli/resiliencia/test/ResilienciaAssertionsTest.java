@@ -6,7 +6,11 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 
 import static io.github.teceli.resiliencia.test.ResilienciaAssertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+// Note: Import assertThat is overloaded - ResilienciaAssertions.assertThat is used for Outcome,
+// org.assertj.core.api.Assertions.assertThat is used for String message validation
 
 class ResilienciaAssertionsTest {
 
@@ -38,34 +42,40 @@ class ResilienciaAssertionsTest {
     void should_fail_when_successAssertedOnFailure() {
         Outcome<String> outcome = new Outcome.Failure<>(new IllegalStateException("boom"));
 
-        assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> assertThat(outcome).isSuccess())
-                .withMessageContaining("Success");
+        var exception = assertThrows(AssertionError.class,
+                () -> assertThat(outcome).isSuccess());
+
+        assertThat(exception.getMessage()).contains("Success");
     }
 
     @Test
     void should_fail_when_valueDiffersFromExpected() {
         Outcome<String> outcome = new Outcome.Success<>("actual");
 
-        assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> assertThat(outcome).hasValue("expected"))
-                .withMessageContaining("expected");
+        var exception = assertThrows(AssertionError.class,
+                () -> assertThat(outcome).hasValue("expected"));
+
+        assertThat(exception.getMessage()).contains("expected");
     }
 
     @Test
     void should_fail_when_failureCauseTypeDiffers() {
         Outcome<String> outcome = new Outcome.Failure<>(new IllegalStateException("boom"));
 
-        assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> assertThat(outcome).hasFailureOfType(IllegalArgumentException.class));
+        var exception = assertThrows(AssertionError.class,
+                () -> assertThat(outcome).hasFailureOfType(IllegalArgumentException.class));
+
+        assertThat(exception.getMessage()).contains("IllegalArgumentException");
     }
 
     @Test
     void should_fail_when_timeoutDurationDiffers() {
         Outcome<String> outcome = new Outcome.TimedOut<>(Duration.ofMillis(50));
 
-        assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> assertThat(outcome).isTimedOutAfter(Duration.ofMillis(100)));
+        var exception = assertThrows(AssertionError.class,
+                () -> assertThat(outcome).isTimedOutAfter(Duration.ofMillis(100)));
+
+        assertThat(exception.getMessage()).contains("0.1S");
     }
 
     @Test
@@ -73,7 +83,6 @@ class ResilienciaAssertionsTest {
         Outcome<String> outcome = new Outcome.Success<>("done");
         var outcomeAssert = assertThat(outcome);
 
-        assertThatExceptionOfType(AssertionError.class)
-            .isThrownBy(outcomeAssert::isTimedOut);
+        assertThrows(AssertionError.class, outcomeAssert::isTimedOut);
     }
 }

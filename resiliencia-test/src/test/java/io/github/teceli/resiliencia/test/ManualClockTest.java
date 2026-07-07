@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class ManualClockTest {
 
@@ -45,8 +45,8 @@ class ManualClockTest {
     void should_rejectNegativeDuration_when_advanced() {
         var clock = ManualClock.create();
 
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> clock.advance(Duration.ofMillis(-1)));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> clock.advance(Duration.ofMillis(-1)));
     }
 
     @Test

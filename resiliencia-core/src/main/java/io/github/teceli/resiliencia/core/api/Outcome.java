@@ -30,9 +30,9 @@ public sealed interface Outcome<T> {
     default <U> U fold(java.util.function.Function<T, U> onSuccess,
                        java.util.function.Function<Throwable, U> onFailure) {
         return switch (this) {
-            case Success<T> s -> onSuccess.apply(s.value());
-            case Failure<T> f -> onFailure.apply(f.cause());
-            case TimedOut<T> t -> onFailure.apply(new ResilienciaTimeoutException(t.timeout()));
+            case Success<T>(T value) -> onSuccess.apply(value);
+            case Failure<T>(Throwable cause) -> onFailure.apply(cause);
+            case TimedOut<T>(Duration timeout) -> onFailure.apply(new ResilienciaTimeoutException(timeout));
         };
     }
 }

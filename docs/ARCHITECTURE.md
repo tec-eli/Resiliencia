@@ -103,6 +103,10 @@ Other exception types (e.g., `RuntimeException`, `NullPointerException`, `Illega
 unless explicitly configured via `withShouldRetry()`. This reduces noise and improves latency in failure paths:
 when an operation fails permanently, fail fast instead of burning retries.
 
+This narrow default does not widen itself based on composition: composing Retry outermost of Timeout, Bulkhead, or
+RateLimiter (`resiliencia-compose`'s recommended order) does not automatically retry those patterns' own exceptions
+either — `shouldRetry` must be extended explicitly to cover them (see `docs/specs/retry.md`).
+
 ---
 
 ## Maven module strategy

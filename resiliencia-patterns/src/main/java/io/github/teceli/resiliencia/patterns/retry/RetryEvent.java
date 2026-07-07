@@ -18,4 +18,6 @@ public sealed interface RetryEvent extends ResilienceEvent {
     record Success(Instant timestamp, int totalAttempts) implements RetryEvent {}
 
     record Exhausted(Instant timestamp, int totalAttempts, Throwable lastError) implements RetryEvent {}
+
+    record Rejected(Instant timestamp, int attemptNumber, Throwable error) implements RetryEvent {}
 }
