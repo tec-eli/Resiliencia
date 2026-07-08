@@ -145,7 +145,9 @@ Concretely, across `resiliencia-patterns`:
   an `Error` thrown by the operation propagates uncaught, on the calling thread.
 - `Timeout` runs the operation on a virtual thread, so it must catch `Error` there to observe it at all — but still
   never wraps it into `Outcome`; it stores the `Error` and rethrows it unchanged on the caller's thread once the
-  worker finishes (see `Timeout.outcome()`).
+  worker finishes (see `Timeout.outcome()`). It still emits `TimeoutEvent.Failed` for observability before
+  rethrowing — same rationale as `CircuitBreaker`'s permit bookkeeping below: this is event bookkeeping, not
+  turning the `Error` into a business outcome.
 - `CircuitBreaker` additionally must resolve any HalfOpen test-call permit an `Error` consumed (a one-shot budget
   counter, not a releasable semaphore) — it catches `Error` solely to call `recordOutcome(true, ...)` before
   rethrowing, so the circuit can still transition out of HalfOpen. This is bookkeeping, not error swallowing: the
