@@ -145,6 +145,7 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
 
         var caughtError = error.get();
         if (caughtError != null) {
+            emit(new TimeoutEvent.Failed(clock.instant(), caughtError));
             throw caughtError;
         }
 

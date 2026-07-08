@@ -204,6 +204,23 @@ class TimeoutPatternTest {
     }
 
     @Test
+    void should_emitFailedEvent_when_operationThrowsErrorBeforeDeadline() {
+        var events = new ArrayList<TimeoutEvent>();
+        var boom = new OutOfMemoryError("boom");
+        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+                .withListener(event -> events.add((TimeoutEvent) event));
+
+        assertThrows(OutOfMemoryError.class, () -> timeout.outcome(() -> {
+            throw boom;
+        }));
+
+        assertThat(events)
+                .singleElement()
+                .isInstanceOfSatisfying(TimeoutEvent.Failed.class, f ->
+                        assertThat(f.error()).isSameAs(boom));
+    }
+
+    @Test
     void should_returnOperationResult_when_listenerThrowsException() {
         var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
                 .withListener(event -> {
