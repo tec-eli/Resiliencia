@@ -7,6 +7,11 @@
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/java-21%2B-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.teceli/resiliencia.svg)](https://central.sonatype.com/artifact/io.github.teceli/resiliencia)
+[![Build & Test](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml)
+[![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/resiliencia)
+[![CodeQL](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml)
+[![Static Analysis](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml)
 
 **[Website & API docs →](https://tec-eli.github.io/resiliencia/)**
 
