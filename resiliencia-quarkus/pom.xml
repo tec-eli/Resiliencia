@@ -31,7 +31,7 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-arc</artifactId>
-            <version>3.37.0</version>
+            <version>3.37.2</version>
         </dependency>
 
         <dependency>
