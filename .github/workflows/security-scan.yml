@@ -1,4 +1,4 @@
-name: OWASP Dependency-Check
+name: Trivy Vulnerability Scan
 
 on:
   push:
@@ -9,28 +9,29 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  dependency-check:
+  trivy-scan:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
+          scan-type: fs
+          scan-ref: '.'
+          scanners: vuln
+          format: sarif
+          output: trivy-results.sarif
+          severity: 'CRITICAL,HIGH'
 
-      - name: Run OWASP Dependency-Check
-        run: mvn -B -Psecurity-scan org.owasp:dependency-check-maven:aggregate
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-
-      - name: Upload report
+      - name: Upload SARIF results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: dependency-check-report
-          path: target/dependency-check-report.html
+          sarif_file: trivy-results.sarif
