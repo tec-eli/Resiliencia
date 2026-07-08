@@ -194,7 +194,7 @@ public final class RateLimiter<T> implements Resilient<T> {
             if (clock.instant().plus(untilWindowEnd).isAfter(deadline)) {
                 return AcquireOutcome.rejected(untilWindowEnd);
             }
-            // Duration.toMillis() throws ArithmeticException on overflow for extreme values;
+            // Duration.toMillis() throws ArithmeticException on overflow for extreme values
             // clamp to Long.MAX_VALUE instead of letting that escape.
             var untilWindowEndMillis =
                     untilWindowEnd.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : untilWindowEnd.toMillis();
