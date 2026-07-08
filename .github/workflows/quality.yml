@@ -1,0 +1,39 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  spotbugs-pmd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile
+        run: mvn -B compile
+
+      # Skips modules that are still source-less skeletons (module-info only) — SpotBugs/PMD have
+      # nothing to analyze there — and resiliencia-stress, whose jcstress harness classes are
+      # annotation-processor-generated, not hand-written, and already exempt from per-PR gating.
+      - name: SpotBugs
+        run: >
+          mvn -B -pl '!resiliencia-metrics,!resiliencia-micrometer,!resiliencia-opentelemetry,
+          !resiliencia-spring,!resiliencia-quarkus,!resiliencia-micronaut,!resiliencia-stress'
+          com.github.spotbugs:spotbugs-maven-plugin:check
+
+      - name: PMD
+        run: >
+          mvn -B -pl '!resiliencia-metrics,!resiliencia-micrometer,!resiliencia-opentelemetry,
+          !resiliencia-spring,!resiliencia-quarkus,!resiliencia-micronaut,!resiliencia-stress'
+          org.apache.maven.plugins:maven-pmd-plugin:check

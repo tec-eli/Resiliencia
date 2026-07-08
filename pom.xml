@@ -39,11 +39,8 @@
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.10.1</maven-javadoc-plugin.version>
-
-        <!-- SonarCloud -->
-        <sonar.organization>tec-eli</sonar.organization>
-        <sonar.projectKey>tec-eli_resiliencia</sonar.projectKey>
-        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <spotbugs-maven-plugin.version>4.8.6.6</spotbugs-maven-plugin.version>
+        <pmd-maven-plugin.version>3.25.0</pmd-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -121,6 +118,25 @@
                             </goals>
                         </execution>
                     </executions>
+                </plugin>
+
+                <!-- Static analysis; run explicitly in CI (mvn spotbugs:check / pmd:check), not bound to the default build. -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${spotbugs-maven-plugin.version}</version>
+                    <configuration>
+                        <excludeFilterFile>${maven.multiModuleProjectDirectory}/spotbugs-exclude.xml</excludeFilterFile>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-pmd-plugin</artifactId>
+                    <version>${pmd-maven-plugin.version}</version>
+                    <configuration>
+                        <targetJdk>${java.version}</targetJdk>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
