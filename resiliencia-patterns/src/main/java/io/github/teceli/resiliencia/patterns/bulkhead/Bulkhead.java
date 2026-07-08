@@ -134,7 +134,7 @@ public final class Bulkhead<T> implements Resilient<T> {
     public Outcome<T> outcome(Operation<T> operation) {
         boolean acquired;
         try {
-            // Duration.toMillis() throws ArithmeticException on overflow for extreme values;
+            // Duration.toMillis() throws ArithmeticException on overflow for extreme values
             // clamp to Long.MAX_VALUE instead of letting that escape.
             var maxWaitMillis = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : maxWait.toMillis();
             acquired = permits.tryAcquire(maxWaitMillis, TimeUnit.MILLISECONDS);

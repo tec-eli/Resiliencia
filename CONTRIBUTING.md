@@ -1,6 +1,7 @@
 # Contributing — resiliencia
 
-Thank you for your interest in contributing. This document explains how the project is organized and how to participate effectively.
+Thank you for your interest in contributing. This document explains how the project is organized and how to participate 
+effectively.
 
 ---
 
@@ -11,8 +12,6 @@ Requirements:
 - Maven 3.9+
 - Basic familiarity with virtual threads and Java concurrency
 
-If this is your first time contributing to a Java library, the ADRs in `docs/adr/` are the best entry point. They explain the *why* behind every major structural decision.
-
 ---
 
 ## Project structure
@@ -20,15 +19,13 @@ If this is your first time contributing to a Java library, the ADRs in `docs/adr
 ```
 resiliencia/
 ├── resiliencia-core/           ← Interfaces, base types, SPI
-├── resiliencia-patterns/       ← The 5 resilience patterns
+├── resiliencia-patterns/       ← The resilience patterns
 ├── resiliencia-compose/        ← Policy and composition
-├── resiliencia-metrics/        ← Observability (Micrometer / OTel) — post-v1
+├── resiliencia-metrics/        ← Observability (Micrometer / OTel)
 ├── resiliencia-examples/       ← Usage examples (not published)
 ├── docs/
-│   ├── adr/                    ← Architecture Decision Records
 │   ├── ARCHITECTURE.md
-│   ├── ROADMAP.md
-│   └── SPEC.md
+│   └── specs/
 ├── README.md
 └── CONTRIBUTING.md
 ```
@@ -40,19 +37,24 @@ resiliencia/
 Read these before writing code. They are not preferences — they are constraints.
 
 ### 1. The public API is a contract
-Everything in `api/` packages is public and stable. A breaking change there affects every user. If you need to change something in `api/`, open an issue first and discuss it before writing code.
+Everything in `api/` packages is public and stable. A breaking change there affects every user. If you need to change 
+something in `api/`, open an issue first and discuss it before writing code.
 
 ### 2. `internal/` is package-private
-Classes in `internal/` must not be accessible from outside the module. The Java Module System enforces this. If you need to expose something, move it to `api/` or `spi/` deliberately.
+Classes in `internal/` must not be accessible from outside the module. The Java Module System enforces this. If you need 
+to expose something, move it to `api/` or `spi/` deliberately.
 
 ### 3. Zero external dependencies in core and patterns
-`resiliencia-core` and `resiliencia-patterns` have no external dependencies. If something requires a third-party library, it goes in a separate optional module.
+`resiliencia-core` and `resiliencia-patterns` have no external dependencies. If something requires a third-party library, 
+it goes in a separate optional module.
 
 ### 4. Virtual threads, not platform thread pools
-Implementations use virtual threads. Do not create `ExecutorService` instances backed by platform threads to implement patterns.
+Implementations use virtual threads. Do not create `ExecutorService` instances backed by platform threads to implement 
+patterns.
 
 ### 5. Modern Java idioms
-Prefer records, sealed classes, and pattern matching where they express the domain more clearly than traditional classes. Avoid anonymous classes and raw types.
+Prefer records, sealed classes, and pattern matching where they express the domain more clearly than traditional classes. 
+Avoid anonymous classes and raw types.
 
 ---
 
@@ -75,7 +77,7 @@ Prefer records, sealed classes, and pattern matching where they express the doma
 ### Submitting a PR
 
 1. Fork the repository
-2. Create a descriptive branch: `feature/retry-jitter`, `fix/circuit-breaker-race`
+2. Create a descriptive branch: `feat/001-retry-jitter`, `fix/308-circuit-breaker-race`
 3. Write tests alongside or before the implementation
 4. Verify everything passes: `mvn verify`
 5. Update documentation if the public API changes
@@ -103,7 +105,8 @@ mvn test -pl resiliencia-patterns -Dtest=RetryTest
 - Concurrency — patterns must be thread-safe under concurrent load
 - Configuration edge cases — zero attempts, zero duration, etc.
 
-Internal packages may require `--add-opens` in the Surefire configuration. This is already set up in the parent POM. Do not expose internal packages to work around this.
+Internal packages may require `--add-opens` in the Surefire configuration. This is already set up in the parent POM. 
+Do not expose internal packages to work around this.
 
 ---
 
@@ -119,7 +122,8 @@ Internal packages may require `--add-opens` in the Surefire configuration. This 
 
 ## ADR — Architecture Decision Records
 
-When a contribution involves a significant design decision, document it as a new ADR in `docs/adr/`. Look at the existing ADRs for format reference. Include the ADR in the same PR as the code.
+When a contribution involves a significant design decision, document it as a new ADR in `docs/adr/`. Look at the 
+existing ADRs for format reference. Include the ADR in the same PR as the code.
 
 ---
 
