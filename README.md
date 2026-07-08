@@ -9,7 +9,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.teceli/resiliencia.svg)](https://central.sonatype.com/artifact/io.github.teceli/resiliencia)
 [![Build & Test](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml)
 [![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/resiliencia)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/Resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/Resiliencia)
 [![CodeQL](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml)
 [![Static Analysis](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml)
 
