@@ -20,8 +20,10 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Compile
-        run: mvn -B compile
+      # Installs every module's jar to the local repo so later steps (each a separate mvn
+      # process) can resolve inter-module dependencies (e.g. resiliencia-patterns -> resiliencia-core).
+      - name: Install
+        run: mvn -B install -DskipTests
 
       # Skips modules that are still source-less skeletons (module-info only) — SpotBugs/PMD have
       # nothing to analyze there — and resiliencia-stress, whose jcstress harness classes are
