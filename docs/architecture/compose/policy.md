@@ -28,14 +28,14 @@ Order matters semantically. Known ordering pitfalls fall into two categories, en
 - **Legitimate alternate semantics** — the reversed order is a real, sometimes-needed configuration, just not the
   default recommendation. Logged as a warning, construction proceeds.
 
-| Ordering | Problem | Enforcement |
-|---|---|---|
-| Retry wrapping CircuitBreaker | The retry loop keeps burning retry budget against an already-open circuit, making zero real calls. No legitimate use case. | Rejected at construction — throws `InvalidPolicyException` |
-| Bulkhead wrapping CircuitBreaker | A permit is reserved before the circuit state is known, wasting bulkhead capacity on a call that fails immediately once the circuit check runs. No legitimate use case. | Rejected at construction — throws `InvalidPolicyException` |
-| Bulkhead wrapping RateLimiter | A permit is reserved before the rate limit is checked, wasting bulkhead capacity on a call that gets rejected once the rate-limit check runs. No legitimate use case. | Rejected at construction — throws `InvalidPolicyException` |
-| Timeout wrapping Retry | Correct order for *per-attempt* timeout, which is what the library implements today. Only a mistake if the user actually wants an *overall/total deadline* across the whole retry loop — see below. | Logged as `WARN` via SLF4J; construction proceeds. Suppressed if Retry has an overall deadline configured (see below). |
-| Retry wrapping RateLimiter | Each attempt is independently subject to the rate limit instead of the whole call being gated once, outermost. Legitimate when the limiter exists to bound the rate of outbound calls per attempt (e.g. an external API's own rate limit). | Logged as `WARN` via SLF4J; construction proceeds |
-| Retry wrapping Bulkhead | The permit is re-acquired per attempt instead of held for the whole retry loop. Legitimate when the intent is to avoid monopolizing a permit during backoff waits. | Logged as `WARN` via SLF4J; construction proceeds |
+| Ordering                         | Problem                                                                                                                                                                                                                                    | Enforcement                                                                                                            |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
+| Retry wrapping CircuitBreaker    | The retry loop keeps burning retry budget against an already-open circuit, making zero real calls. No legitimate use case.                                                                                                                 | Rejected at construction — throws `InvalidPolicyException`                                                             |
+| Bulkhead wrapping CircuitBreaker | A permit is reserved before the circuit state is known, wasting bulkhead capacity on a call that fails immediately once the circuit check runs. No legitimate use case.                                                                    | Rejected at construction — throws `InvalidPolicyException`                                                             |
+| Bulkhead wrapping RateLimiter    | A permit is reserved before the rate limit is checked, wasting bulkhead capacity on a call that gets rejected once the rate-limit check runs. No legitimate use case.                                                                      | Rejected at construction — throws `InvalidPolicyException`                                                             |
+| Timeout wrapping Retry           | Correct order for *per-attempt* timeout, which is what the library implements today. Only a mistake if the user actually wants an *overall/total deadline* across the whole retry loop — see below.                                        | Logged as `WARN` via SLF4J; construction proceeds. Suppressed if Retry has an overall deadline configured (see below). |
+| Retry wrapping RateLimiter       | Each attempt is independently subject to the rate limit instead of the whole call being gated once, outermost. Legitimate when the limiter exists to bound the rate of outbound calls per attempt (e.g. an external API's own rate limit). | Logged as `WARN` via SLF4J; construction proceeds                                                                      |
+| Retry wrapping Bulkhead          | The permit is re-acquired per attempt instead of held for the whole retry loop. Legitimate when the intent is to avoid monopolizing a permit during backoff waits.                                                                         | Logged as `WARN` via SLF4J; construction proceeds                                                                      |
 
 All rejected pairs are checked **transitively**: when `and(pattern)` is called, `Policy` checks the newly added
 pattern's kind against *all* patterns already in the chain, not just the immediately preceding one — other patterns
@@ -56,7 +56,8 @@ RateLimiter → CircuitBreaker → Bulkhead → Retry → Timeout
 ```
 
 - **RateLimiter outermost** — rejects excess load before any other pattern spends work on it
-- **CircuitBreaker before Bulkhead and Retry** — an open circuit should short-circuit before a permit is reserved or a retry loop starts
+- **CircuitBreaker before Bulkhead and Retry** — an open circuit should short-circuit before a permit is reserved or a
+  retry loop starts
 - **Bulkhead before Retry** — one permit is held for the whole retry loop, not re-acquired per attempt
 - **Retry before Timeout** — Timeout is per-attempt, so it must sit on the innermost layer to apply to each attempt
   individually. **This does not happen automatically with `Retry.create()`'s defaults**: the default `shouldRetry`
@@ -89,9 +90,9 @@ only adding a suppression condition to one existing `WARN` rule. The field itsel
 
 ## Configuration surface
 
-| Property | Required | Description |
-|---|---|---|
-| patterns | yes | Ordered list of patterns, outermost first |
+| Property | Required | Description                               |
+|----------|----------|-------------------------------------------|
+| patterns | yes      | Ordered list of patterns, outermost first |
 
 A Policy with a single pattern is valid. A Policy with zero patterns is a construction error.
 
@@ -100,6 +101,7 @@ A Policy with a single pattern is valid. A Policy with zero patterns is a constr
 ## Failure
 
 `InvalidPolicyException` is thrown at construction time when:
+
 - the pattern list is empty,
 - Retry wraps CircuitBreaker anywhere in the chain (transitive check),
 - Bulkhead wraps CircuitBreaker anywhere in the chain (transitive check), or

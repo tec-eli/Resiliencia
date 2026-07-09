@@ -48,15 +48,15 @@ The compiler enforces exhaustive handling. All three cases must be addressed.
 All exceptions thrown by resiliencia are unchecked and extend a common base type. Each subtype carries structured
 context as typed fields — not just a message string.
 
-| Exception | Thrown by | Key fields |
-|---|---|---|
-| `RetryExhaustedException` | Retry | attempt count, last cause |
-| `RetryRejectedException` | Retry | attempt count, last cause |
-| `ResilienciaTimeoutException` | Timeout | configured limit |
-| `CircuitBreakerOpenException` | CircuitBreaker | name, open since, remaining wait |
-| `BulkheadFullException` | Bulkhead | name, max concurrent calls, max wait |
-| `RateLimiterException` | RateLimiter | name, limit, period, max wait |
-| `InvalidPolicyException` | Policy (at construction) | problem description, suggested fix |
+| Exception                     | Thrown by                | Key fields                           |
+|-------------------------------|--------------------------|--------------------------------------|
+| `RetryExhaustedException`     | Retry                    | attempt count, last cause            |
+| `RetryRejectedException`      | Retry                    | attempt count, last cause            |
+| `ResilienciaTimeoutException` | Timeout                  | configured limit                     |
+| `CircuitBreakerOpenException` | CircuitBreaker           | name, open since, remaining wait     |
+| `BulkheadFullException`       | Bulkhead                 | name, max concurrent calls, max wait |
+| `RateLimiterException`        | RateLimiter              | name, limit, period, max wait        |
+| `InvalidPolicyException`      | Policy (at construction) | problem description, suggested fix   |
 
 The original operation's exception is always reachable, either as a typed field or via the standard cause chain.
 
