@@ -260,7 +260,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         if (bound <= 0) {
             return delayMs;
         }
-        // Avoid overflow if delaysMs is extreme and jitterFactor = 1.0 (bound + 1 o delayMs + would be greater than Long.MAX_VALUE).
+        // Clamp bound so delayMs + bound cannot overflow Long.MAX_VALUE when delayMs is extreme and jitterFactor = 1.0.
         bound = Math.min(bound, Long.MAX_VALUE - delayMs);
         return delayMs + ThreadLocalRandom.current().nextLong(-bound, bound + 1);
     }

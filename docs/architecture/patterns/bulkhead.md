@@ -34,5 +34,5 @@ a permit, the call is rejected. If `maxWait` is zero, calls are rejected immedia
 
 ## Failure
 
-Throws `BulkheadFullException` when the concurrency limit is reached and `maxWaitDuration` elapses. Fields: name, max 
-concurrent calls.
+Throws `BulkheadFullException` when the concurrency limit is reached and `maxWait` elapses. Fields: name, max 
+concurrent calls, max wait.

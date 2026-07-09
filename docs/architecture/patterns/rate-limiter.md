@@ -36,4 +36,4 @@ caller waits up to `maxWait`. If no permit becomes available within that window,
 
 ## Failure
 
-Throws `RateLimiterException` when no permit is available within `timeoutDuration`. Fields: name, retry after.
+Throws `RateLimiterException` when no permit is available within `maxWait`. Fields: name, limit, period, max wait.

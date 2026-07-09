@@ -137,7 +137,7 @@ public final class Policy<T> implements Resilient<T> {
     }
 
     /**
-     * Create a policy from the given patterns, composed in the library's recommended default
+     * Create a policy from the given patterns, composed in the library's optimum
      * order regardless of the order they are passed in — outermost to innermost:
      * RateLimiter, CircuitBreaker, Bulkhead, Retry, Timeout.
      *
@@ -157,7 +157,7 @@ public final class Policy<T> implements Resilient<T> {
         for (var pattern : patterns) {
             sorted.add(Objects.requireNonNull(pattern, PATTERN_MUST_NOT_BE_NULL));
         }
-        sorted.sort(Comparator.comparingInt(pattern -> defaultOrderRank(pattern.patternKind())));
+        sorted.sort(Comparator.comparingInt(pattern -> optimumOrderRank(pattern.patternKind())));
 
         var policy = compose(sorted.getFirst());
         for (var pattern : sorted.subList(1, sorted.size())) {
@@ -167,9 +167,9 @@ public final class Policy<T> implements Resilient<T> {
     }
 
     /**
-     * Position of each pattern kind in the recommended default order; lower means further out.
+     * Position of each pattern kind in the optimum order; lower means further out.
      */
-    private static int defaultOrderRank(PatternKind kind) {
+    private static int optimumOrderRank(PatternKind kind) {
         return switch (kind) {
             case RATE_LIMITER -> 0;
             case CIRCUIT_BREAKER -> 1;

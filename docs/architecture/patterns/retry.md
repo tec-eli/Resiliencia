@@ -28,7 +28,7 @@ chance of success and delays failure reporting. For operations where non-IOExcep
 `TemporaryServiceException`), override the default predicate via `withShouldRetry()`.
 
 **This also applies when Retry is composed with other patterns.** Composing Retry outermost of Timeout, Bulkhead, or
-RateLimiter (see `policy.md`'s "Recommended order") does **not** automatically retry those patterns' own exceptions
+RateLimiter (see `policy.md`'s "Optimum order") does **not** automatically retry those patterns' own exceptions
 (`ResilienciaTimeoutException`, `BulkheadFullException`, `RateLimiterException`) — none of them are `IOException`
 subclasses. If the composition is meant to retry a per-attempt timeout, a rejected permit, or a rate-limit rejection,
 `shouldRetry` must be extended explicitly to cover the relevant exception type(s); the default is deliberately

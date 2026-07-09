@@ -30,7 +30,7 @@ the operation holds resources that must be released cleanly.
 
 ## Events
 
-- **TimedOut** — the operation exceeded the limit. Carries: configured limit, actual elapsed time.
+- **TimedOut** — the operation exceeded the limit. Carries: configured limit.
 - **Succeeded** — the operation completed within the limit. Carries: elapsed time.
 - **Failed** — the operation threw before the timeout elapsed. Carries: the thrown exception.
 - **AbandonedWorkerSucceeded** — a worker abandoned after `TimedOut` eventually completed successfully. Observability
@@ -42,4 +42,4 @@ the operation holds resources that must be released cleanly.
 
 ## Failure
 
-Throws `ResilienciaTimeoutException`. Fields: configured limit, actual elapsed time.
+Throws `ResilienciaTimeoutException`. Fields: configured limit.

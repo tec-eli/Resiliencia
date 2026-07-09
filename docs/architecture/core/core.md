@@ -17,7 +17,7 @@ Any single pattern and any composed Policy are interchangeable as a Resilient �
 hold.
 
 `Resilient<T>` also exposes `PatternKind patternKind()`, defaulting to `CUSTOM`. This is a closed enum
-(`RATE_LIMITER, CIRCUIT_BREAKER, BULKHEAD, RETRY, TIMEOUT, CUSTOM`) used internally by `Policy` to validate
+(`RETRY, TIMEOUT, CIRCUIT_BREAKER, BULKHEAD, RATE_LIMITER, CUSTOM`) used internally by `Policy` to validate
 composition order at construction time (see `policy.md`). It is distinct from the observability-facing
 `ResilienceEvent.patternName(): String` — `patternKind()` exists for compile-time-safe internal control flow, not
 for external reporting.
@@ -52,10 +52,10 @@ context as typed fields — not just a message string.
 |---|---|---|
 | `RetryExhaustedException` | Retry | attempt count, last cause |
 | `RetryRejectedException` | Retry | attempt count, last cause |
-| `ResilienciaTimeoutException` | Timeout | configured limit, actual elapsed |
+| `ResilienciaTimeoutException` | Timeout | configured limit |
 | `CircuitBreakerOpenException` | CircuitBreaker | name, open since, remaining wait |
-| `BulkheadFullException` | Bulkhead | name, max concurrent calls |
-| `RateLimiterException` | RateLimiter | name, retry after |
+| `BulkheadFullException` | Bulkhead | name, max concurrent calls, max wait |
+| `RateLimiterException` | RateLimiter | name, limit, period, max wait |
 | `InvalidPolicyException` | Policy (at construction) | problem description, suggested fix |
 
 The original operation's exception is always reachable, either as a typed field or via the standard cause chain.

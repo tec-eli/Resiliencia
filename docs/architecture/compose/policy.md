@@ -39,7 +39,7 @@ Order matters semantically. Known ordering pitfalls fall into two categories, en
 
 All rejected pairs are checked **transitively**: when `and(pattern)` is called, `Policy` checks the newly added
 pattern's kind against *all* patterns already in the chain, not just the immediately preceding one — other patterns
-can legitimately sit between the two that actually conflict in the full recommended order below.
+can legitimately sit between the two that actually conflict in the full optimum order below.
 
 Pattern identity for this check comes from `Resilient<T>.patternKind()` (see `core.md`) — a closed `PatternKind`
 enum, not `instanceof` (fragile against future decorators/wrappers) and not the observability-facing
@@ -49,7 +49,7 @@ Both `Policy.compose(x).and(y)...` and `Policy.useOptimumOrder(...)` go through 
 `useOptimumOrder()` is a second entry point onto the same `Policy` type — not a separate builder — and is not a
 silent reordering mechanism: `Policy` never reorders a user-supplied chain.
 
-### Recommended order
+### Optimum order
 
 ```
 RateLimiter → CircuitBreaker → Bulkhead → Retry → Timeout
