@@ -13,10 +13,13 @@ import org.openjdk.jcstress.infra.results.I_Result;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * CircuitBreaker.open() (CircuitBreaker.java:385-389) CASes from Closed to Open. Two actors each
- * record a failing call once the sliding window is already primed to be full and past the failure
- * rate threshold; only one of them may win the CAS, so exactly one {@code Opened} event must ever
- * be emitted, regardless of actor interleaving.
+ * Verifies that the transition from Closed to Open state occurs exactly once
+ * when multiple actors concurrently attempt to trigger the transition.
+ *
+ * The sliding window is primed to be full and past the failure rate threshold.
+ * Two actors simultaneously record failing calls. A compare-and-swap mechanism
+ * ensures only one may win the state transition, so exactly one {@code Opened}
+ * event must be emitted regardless of actor interleaving.
  */
 @JCStressTest
 @State

@@ -1,0 +1,40 @@
+name: Stress Tests (jcstress)
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jcstress:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Builds only what resiliencia-stress needs: itself and its own dependencies.
+      - name: Build the stress module and its shaded jcstress jar
+        run: mvn -B -pl resiliencia-stress -am package -DskipTests
+
+      # jcstress exits non-zero when any run produces a FORBIDDEN outcome, which fails this job.
+      - name: Run jcstress
+        working-directory: resiliencia-stress
+        run: java -jar target/resiliencia-stress-*-shaded.jar
+
+      - name: Upload jcstress HTML report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jcstress-report
+          path: resiliencia-stress/results/
+          retention-days: 90
