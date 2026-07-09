@@ -193,7 +193,10 @@ public final class CircuitBreaker<T> implements Resilient<T> {
 
     /**
      * Predicate evaluated against a successful return value to record it as a failure anyway,
-     * even though no exception was thrown.
+     * even though no exception was thrown — e.g. an HTTP client returning a 200 with an error
+     * body. If the predicate itself throws, that is logged as a warning and treated as
+     * {@code false} — a broken predicate never turns a successful call into a reported failure.
+     * Default: no result is ever recorded as a failure.
      */
     public CircuitBreaker<T> withRecordOnResult(Predicate<T> recordOnResult) {
         return new CircuitBreaker<>(name, failureRateThreshold, slowCallRateThreshold, slowCallDurationThreshold,
@@ -201,6 +204,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             recordOnResult, listeners, clock);
     }
 
+    /**
+     * Add a listener notified of every {@link CircuitBreakerEvent} emitted by this instance.
+     * Listener exceptions are logged and otherwise ignored — a broken listener never affects the
+     * outcome.
+     */
     public CircuitBreaker<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
