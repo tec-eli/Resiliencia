@@ -23,7 +23,7 @@ the operation holds resources that must be released cleanly.
 
 | Property | Required | Description |
 |---|---|---|
-| `duration` | yes | Maximum time allowed for the operation |
+| `timeout` | yes | Maximum time allowed for the operation |
 | `cancelOnTimeout` | no | Whether to interrupt the thread on timeout. Default: true |
 
 ---

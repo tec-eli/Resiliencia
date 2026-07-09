@@ -7,13 +7,13 @@ timeout, the call is rejected.
 
 ## Behavior
 
-Permits are issued up to `limitForPeriod` per `limitRefreshPeriod`. At the start of each period the full permit count is 
+Permits are issued up to `limit` per `period`. At the start of each period the full permit count is
 restored. Unused permits do not carry over to the next period.
 
 When a call arrives, it attempts to acquire a permit. If one is available, the call proceeds immediately. If not, the 
-caller waits up to `timeoutDuration`. If no permit becomes available within that window, the call is rejected.
+caller waits up to `maxWait`. If no permit becomes available within that window, the call is rejected.
 
-`timeoutDuration` of zero means reject immediately if no permit is available.
+`maxWait` of zero means reject immediately if no permit is available.
 
 ---
 
@@ -21,16 +21,16 @@ caller waits up to `timeoutDuration`. If no permit becomes available within that
 
 | Property | Required | Description |
 |---|---|---|
-| `limitForPeriod` | yes | Maximum calls allowed per refresh period |
-| `limitRefreshPeriod` | yes | How often the permit count resets |
-| `timeoutDuration` | no | How long to wait for a permit before rejecting. Default: no wait |
+| `limit` | yes | Maximum calls allowed per period |
+| `period` | yes | How often the permit count resets |
+| `maxWait` | no | How long to wait for a permit before rejecting. Default: no wait |
 
 ---
 
 ## Events
 
-- **PermitAcquired** — a permit was granted, call will proceed. Carries: remaining permits in this period.
-- **PermitRejected** — no permit available within timeout. Carries: estimated time until next permit.
+- **Permitted** — a permit was granted, call will proceed. Carries: remaining permits in this period.
+- **Rejected** — no permit available within timeout. Carries: estimated time until next permit.
 
 ---
 

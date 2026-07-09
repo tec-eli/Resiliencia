@@ -65,7 +65,7 @@ permit (counted as a failed test call) before propagating, so it cannot leak the
 | `failureRateThreshold` | no | Fraction of failures that triggers open. Default: 0.5 |
 | `slowCallRateThreshold` | no | Fraction of slow calls that triggers open. Default: 1.0 |
 | `slowCallDurationThreshold` | no | What counts as a slow call. Default: no limit |
-| `slidingWindow` | no | Number of calls evaluated for rate calculation. Default: 10 |
+| `slidingWindowSize` | no | Number of calls evaluated for rate calculation. Default: 10 |
 | `waitDurationInOpenState` | no | Time in Open before transitioning to HalfOpen. Default: 60s |
 | `permittedCallsInHalfOpenState` | no | Test calls allowed in HalfOpen. Default: 3 |
 | `recordOn` | no | Exception types that count as failures. Default: any Exception |

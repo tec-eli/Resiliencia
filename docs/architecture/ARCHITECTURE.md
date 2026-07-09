@@ -114,21 +114,9 @@ ships and gets used regardless).
 ## Exception classification: Transient vs. Permanent failures
 
 Patterns that can retry or recover from failures (Retry, CircuitBreaker) classify exceptions to avoid wasted
-retry attempts on permanent failures:
-
-- **Transient failures** (IO exceptions): network timeouts, connection resets, DNS failures, temporary service unavailability.
-  These failures *may* succeed on retry — retrying makes sense.
-- **Permanent failures** (logic errors): invalid arguments, null pointer dereferences, programming mistakes.
-  Retrying a permanent failure has no chance of success — it wastes time and delays failure reporting.
-
-By default, Retry only retries `IOException` and subclasses (the best proxy for transient infrastructure faults).
-Other exception types (e.g., `RuntimeException`, `NullPointerException`, `IllegalArgumentException`) are not retried
-unless explicitly configured via `withShouldRetry()`. This reduces noise and improves latency in failure paths:
-when an operation fails permanently, fail fast instead of burning retries.
-
-This narrow default does not widen itself based on composition: composing Retry outermost of Timeout, Bulkhead, or
-RateLimiter (`resiliencia-compose`'s recommended order) does not automatically retry those patterns' own exceptions
-either — `shouldRetry` must be extended explicitly to cover them (see `docs/patterns/retry.md`).
+retry attempts on permanent failures — transient (IO, network) vs. permanent (logic errors, bugs). Retry's default
+predicate and how this interacts with composition is specified in `docs/architecture/patterns/retry.md`'s
+"Exception classification" section — not duplicated here.
 
 ---
 
