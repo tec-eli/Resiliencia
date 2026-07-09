@@ -42,6 +42,29 @@ dependency injection.
 
 ---
 
+## Record vs. class for pattern implementations
+
+`Retry` and `Timeout` are records: pure immutable configuration, nothing else. `CircuitBreaker`, `Bulkhead`, and
+`RateLimiter` are final classes instead, because each holds live, concurrently-mutated state on top of its
+configuration — `CircuitBreaker`'s current `CircuitState` and sliding window, `Bulkhead`'s permits, `RateLimiter`'s
+current window and used count.
+
+A Java record's instance state is strictly limited to its canonical components — nothing else may be added besides
+`static` fields. Embedding the live state as a component (e.g. a `Semaphore` or `AtomicReference<StateSlot>`) would
+force a public accessor for it, letting external code reach in and manipulate internal state directly (e.g.
+`bulkhead.permits().release()`), and would pollute the record's auto-generated `equals()`/`hashCode()`/`toString()`
+with implementation details that aren't part of the pattern's identity.
+
+All five patterns stay immutable in configuration and thread-safe by design regardless of record-vs-class: each
+`withX` method always returns a new, independent instance. For the three stateful ones, "new instance" also means a
+fresh copy of the live state (e.g. a new CircuitBreaker starts back in the Closed state with an empty window).
+
+**Rejected alternatives:** forcing all five patterns to be records for API uniformity (would require exposing live
+mutable state through a public accessor, defeating encapsulation); wrapping live state in a nested record component
+without an accessor (not possible — record components are always accessible).
+
+---
+
 ## Java Module System (JPMS) from day one
 
 Every module has `module-info.java` from its first commit, since Java 21 makes JPMS always available. `internal/`

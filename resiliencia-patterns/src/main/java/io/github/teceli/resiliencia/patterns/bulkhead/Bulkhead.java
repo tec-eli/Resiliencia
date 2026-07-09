@@ -23,10 +23,9 @@ import java.util.concurrent.TimeUnit;
  * fast with {@link BulkheadFullException} (default, {@code maxWait} zero) or block for up to
  * {@code maxWait} until a permit frees up; blocking a virtual thread is cheap.
  *
- * Not a record, unlike Retry and Timeout: a Bulkhead holds live state (the permits). It is
- * still immutable in configuration and thread-safe by design — share one instance across all
- * callers that must compete for the same permits. Each {@code withX} method returns a new,
- * independent Bulkhead with a fresh, unused set of permits.
+ * Holds live state (the permits). Immutable in configuration and thread-safe by design — share
+ * one instance across all callers that must compete for the same permits. Each {@code withX}
+ * method returns a new, independent Bulkhead with a fresh, unused set of permits.
  */
 public final class Bulkhead<T> implements Resilient<T> {
 

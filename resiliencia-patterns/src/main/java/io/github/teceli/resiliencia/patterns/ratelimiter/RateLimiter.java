@@ -25,10 +25,9 @@ import java.util.Objects;
  * {@code maxWait} zero) or wait via {@link Clock#sleep} for up to {@code maxWait} until the
  * next window opens; blocking a virtual thread is cheap.
  *
- * Not a record, unlike Retry and Timeout: a RateLimiter holds live state (the current window
- * and its used permits). It is still immutable in configuration and thread-safe by design —
- * share one instance across all callers that must compete for the same budget. Each
- * {@code withX} method returns a new, independent RateLimiter with a fresh window.
+ * Holds live state (the current window and its used permits). Immutable in configuration and
+ * thread-safe by design — share one instance across all callers that must compete for the same
+ * budget. Each {@code withX} method returns a new, independent RateLimiter with a fresh window.
  */
 public final class RateLimiter<T> implements Resilient<T> {
 
