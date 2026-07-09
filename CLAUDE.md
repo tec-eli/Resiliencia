@@ -6,10 +6,11 @@
 this repository. Follow these conventions consistently. Do not refactor existing code or suggest architectural
 changes unless explicitly requested.
 
-**Source of truth for behavior and design decisions:** `docs/specs/*.md` (one file per concept — core, retry, timeout,
-circuit-breaker, bulkhead, rate-limiter, policy) and `docs/ARCHITECTURE.md` (cross-cutting decisions: virtual threads,
-module system, jcstress, module strategy, no global registry). Both are living documents — if this file and a spec
-ever disagree, the spec wins. The project is on a early stage so this can be changed if there is a better approach.
+**Source of truth for behavior and design decisions:** `docs/*.md`, grouped in a subfolder per module (one file per
+concept — `docs/core/core.md`; `docs/patterns/{retry,timeout,circuit-breaker,bulkhead,rate-limiter}.md`;
+`docs/compose/policy.md`) and `docs/ARCHITECTURE.md` (cross-cutting decisions: virtual threads, module system,
+jcstress, module strategy, no global registry). Both are living documents — if this file and a spec ever disagree,
+the spec wins. The project is on a early stage so this can be changed if there is a better approach.
 
 ### Handling spec gaps
 
@@ -121,7 +122,7 @@ not just adjacent):
   footgun if the user wanted an overall retry-loop deadline (not modeled yet).
 
 Use `Resilient<T>.patternKind()` for this kind of internal check, never `instanceof` and never the observability
-`patternName(): String`. See `docs/specs/policy.md` for full rationale before touching this logic.
+`patternName(): String`. See `docs/compose/policy.md` for full rationale before touching this logic.
 
 ---
 

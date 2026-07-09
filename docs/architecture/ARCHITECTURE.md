@@ -1,7 +1,8 @@
 # Architecture — resiliencia
 
 Cross-cutting decisions that don't belong to a single pattern spec. This is a living document — edited in place as
-decisions change, not superseded by new files. Pattern-specific behavior and rationale live in `specs/`.
+decisions change, not superseded by new files. Pattern-specific behavior and rationale live in
+`docs/architecture/patterns/`.
 
 ---
 
@@ -35,10 +36,34 @@ reusable — not a disposable builder. Each `withX` method returns a new instanc
 dependency injection.
 
 **Rejected alternatives:**
+
 - Configuration records passed to a factory (`Retry.of(new RetryConfig(...))`) — requires users to know a separate
   config class as the primary entry point. May still exist as an internal implementation detail.
 - Annotations (`@WithRetry(maxAttempts = 3)`) — requires a framework/AOP runtime, adds complexity. Could be added
   later as an optional layer over the fluent API, not a replacement for it.
+
+---
+
+## Record vs. class for pattern implementations
+
+`Retry` and `Timeout` are records: pure immutable configuration, nothing else. `CircuitBreaker`, `Bulkhead`, and
+`RateLimiter` are final classes instead, because each holds live, concurrently-mutated state on top of its
+configuration — `CircuitBreaker`'s current `CircuitState` and sliding window, `Bulkhead`'s permits, `RateLimiter`'s
+current window and used count.
+
+A Java record's instance state is strictly limited to its canonical components — nothing else may be added besides
+`static` fields. Embedding the live state as a component (e.g. a `Semaphore` or `AtomicReference<StateSlot>`) would
+force a public accessor for it, letting external code reach in and manipulate internal state directly (e.g.
+`bulkhead.permits().release()`), and would pollute the record's auto-generated `equals()`/`hashCode()`/`toString()`
+with implementation details that aren't part of the pattern's identity.
+
+All five patterns stay immutable in configuration and thread-safe by design regardless of record-vs-class: each
+`withX` method always returns a new, independent instance. For the three stateful ones, "new instance" also means a
+fresh copy of the live state (e.g. a new CircuitBreaker starts back in the Closed state with an empty window).
+
+**Rejected alternatives:** forcing all five patterns to be records for API uniformity (would require exposing live
+mutable state through a public accessor, defeating encapsulation); wrapping live state in a nested record component
+without an accessor (not possible — record components are always accessible).
 
 ---
 
@@ -63,6 +88,7 @@ Resilience patterns have real shared, concurrently-modified state (`CircuitBreak
 non-deterministic and may not reproduce in CI.
 
 `jcstress` lives in its own `resiliencia-stress` module:
+
 - Not published to Maven Central
 - Not run on every PR — run manually before each release (and on the release branch in CI)
 - Complementary to JUnit, not a replacement
@@ -91,21 +117,9 @@ ships and gets used regardless).
 ## Exception classification: Transient vs. Permanent failures
 
 Patterns that can retry or recover from failures (Retry, CircuitBreaker) classify exceptions to avoid wasted
-retry attempts on permanent failures:
-
-- **Transient failures** (IO exceptions): network timeouts, connection resets, DNS failures, temporary service unavailability.
-  These failures *may* succeed on retry — retrying makes sense.
-- **Permanent failures** (logic errors): invalid arguments, null pointer dereferences, programming mistakes.
-  Retrying a permanent failure has no chance of success — it wastes time and delays failure reporting.
-
-By default, Retry only retries `IOException` and subclasses (the best proxy for transient infrastructure faults).
-Other exception types (e.g., `RuntimeException`, `NullPointerException`, `IllegalArgumentException`) are not retried
-unless explicitly configured via `withShouldRetry()`. This reduces noise and improves latency in failure paths:
-when an operation fails permanently, fail fast instead of burning retries.
-
-This narrow default does not widen itself based on composition: composing Retry outermost of Timeout, Bulkhead, or
-RateLimiter (`resiliencia-compose`'s recommended order) does not automatically retry those patterns' own exceptions
-either — `shouldRetry` must be extended explicitly to cover them (see `docs/specs/retry.md`).
+retry attempts on permanent failures — transient (IO, network) vs. permanent (logic errors, bugs). Retry's default
+predicate and how this interacts with composition is specified in `docs/architecture/patterns/retry.md`'s
+"Exception classification" section — not duplicated here.
 
 ---
 

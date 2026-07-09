@@ -25,11 +25,10 @@ import java.util.function.Predicate;
  * failing or slow downstream once the failure or slow-call rate crosses its threshold,
  * rejecting calls immediately instead of piling more load onto something already struggling.
  *
- * Not a record, unlike Retry and Timeout: a CircuitBreaker holds live state (the current
- * {@link CircuitState} and its sliding window). It is still immutable in configuration and
- * thread-safe by design — share one instance across all callers that must observe the same
- * outcomes. Each {@code withX} method returns a new, independent CircuitBreaker, starting back
- * in the Closed state with an empty window.
+ * Holds live state (the current {@link CircuitState} and its sliding window). Immutable in
+ * configuration and thread-safe by design — share one instance across all callers that must
+ * observe the same outcomes. Each {@code withX} method returns a new, independent CircuitBreaker,
+ * starting back in the Closed state with an empty window.
  */
 public final class CircuitBreaker<T> implements Resilient<T> {
 

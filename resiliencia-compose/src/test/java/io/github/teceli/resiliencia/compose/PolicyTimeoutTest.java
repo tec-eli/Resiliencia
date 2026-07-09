@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Integration tests for the real Timeout pattern composed in a Policy,
- * including the recommended per-attempt ordering: Retry outside, Timeout inside.
+ * including the optimum per-attempt ordering: Retry outside, Timeout inside.
  */
 class PolicyTimeoutTest {
 

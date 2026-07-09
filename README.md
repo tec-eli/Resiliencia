@@ -34,9 +34,10 @@ designed around modern Java idioms: sealed interfaces, records, and pattern matc
 ### Single pattern
 
 ```java
-var retry = Retry.of(3)
-    .waitDuration(Duration.ofMillis(500))
-    .retryOn(IOException.class);
+var retry = Retry.<String>create()
+    .withMaxAttempts(3)
+    .withInitialDelay(500)
+    .withShouldRetry(IOException.class::isInstance);
 
 String result = retry.call(() -> api.fetch());
 ```
@@ -44,9 +45,9 @@ String result = retry.call(() -> api.fetch());
 ### Composed policy
 
 ```java
-var policy = Policy.with(circuitBreaker)
-                   .then(retry)
-                   .then(timeout);
+var policy = Policy.compose(circuitBreaker)
+                   .and(retry)
+                   .and(timeout);
 
 // Blocking
 String result = policy.call(() -> api.fetch());

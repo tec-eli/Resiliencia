@@ -166,7 +166,7 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_resolveRecommendedOrder_when_useOptimumOrderReceivesShuffledPatterns() {
+    void should_resolveOptimumOrder_when_useOptimumOrderReceivesShuffledPatterns() {
         var callOrder = new ArrayList<String>();
 
         var policy = Policy.useOptimumOrder(
@@ -204,7 +204,7 @@ class PolicyOrderValidationTest {
     }
 
     @Test
-    void should_constructWithoutWarnOrException_when_fullRecommendedOrderComposedExplicitly() {
+    void should_constructWithoutWarnOrException_when_fullOptimumOrderComposedExplicitly() {
         var stderr = captureStdErr(() ->
                 assertThatNoException().isThrownBy(() -> Policy.compose(fakePattern(PatternKind.RATE_LIMITER))
                         .and(fakePattern(PatternKind.CIRCUIT_BREAKER))

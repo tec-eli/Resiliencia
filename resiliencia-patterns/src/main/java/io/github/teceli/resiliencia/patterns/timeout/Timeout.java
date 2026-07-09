@@ -55,6 +55,9 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
         return new Timeout<>(timeout, DEFAULT_CANCEL_ON_TIMEOUT, List.of(), Clock.systemClock());
     }
 
+    /**
+     * How long the caller waits before the operation is considered timed out. Must be positive.
+     */
     public Timeout<T> withTimeout(Duration timeout) {
         return new Timeout<>(timeout, cancelOnTimeout, listeners, clock);
     }
@@ -69,6 +72,10 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
         return new Timeout<>(timeout, cancelOnTimeout, listeners, clock);
     }
 
+    /**
+     * Add a listener notified of every {@link TimeoutEvent} emitted by this instance. Listener
+     * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
+     */
     public Timeout<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
