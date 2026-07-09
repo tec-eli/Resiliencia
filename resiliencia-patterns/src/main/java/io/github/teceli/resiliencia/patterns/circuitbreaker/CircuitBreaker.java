@@ -274,7 +274,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         var start = clock.instant();
         try {
             var result = operation.execute();
-            recordOutcome(recordOnResult.test(result), start);
+            recordOutcome(testRecordOnResult(result), start);
             return new Outcome.Success<>(result);
         } catch (Exception e) {
             recordOutcome(isFailure(e), start);
@@ -396,6 +396,19 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         if (current.compareAndSet(from, new StateSlot(new CircuitState.Closed()))) {
             window.reset();
             emit(new CircuitBreakerEvent.Closed(clock.instant(), name, from.successes.get()));
+        }
+    }
+
+    /**
+     * A throwing {@code recordOnResult} is logged, not thrown: a bad user predicate must not turn
+     * a successful call into a reported failure.
+     */
+    private boolean testRecordOnResult(T result) {
+        try {
+            return recordOnResult.test(result);
+        } catch (Exception ex) {
+            log.warn("recordOnResult threw while testing a successful result", ex);
+            return false;
         }
     }
 

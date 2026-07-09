@@ -319,6 +319,34 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_returnSuccess_when_recordOnResultThrows() {
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withRecordOnResult(result -> {
+                    throw new RuntimeException("boom");
+                });
+
+        var outcome = circuitBreaker.outcome(() -> "ok");
+
+        assertThat(outcome).isEqualTo(new Outcome.Success<>("ok"));
+    }
+
+    @Test
+    void should_notOpenCircuit_when_recordOnResultThrowsOnEverySuccess() {
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withSlidingWindowSize(2)
+                .withFailureRateThreshold(0.5)
+                .withRecordOnResult(result -> {
+                    throw new RuntimeException("boom");
+                });
+
+        assertThat(circuitBreaker.call(() -> "ok")).isEqualTo("ok");
+        assertThat(circuitBreaker.call(() -> "ok")).isEqualTo("ok");
+
+        // A throwing recordOnResult is treated as "false" (not a failure), so the circuit stays Closed.
+        assertThat(circuitBreaker.call(() -> "ok")).isEqualTo("ok");
+    }
+
+    @Test
     void should_emitCallRecordedEvent_when_callSucceeds() {
         var events = new ArrayList<CircuitBreakerEvent>();
         var circuitBreaker = CircuitBreaker.<String>of("test")

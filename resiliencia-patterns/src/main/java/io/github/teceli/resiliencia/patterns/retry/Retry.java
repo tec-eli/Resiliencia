@@ -195,7 +195,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             } catch (Exception e) {
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
-                if (attempt < maxAttempts && shouldRetry.test(e) && !deadlineExceeded(startInstant)) {
+                if (attempt < maxAttempts && testShouldRetry(e) && !deadlineExceeded(startInstant)) {
                     try {
                         sleep(Math.min(applyJitter(delayMs), maxDelayMs));
                     } catch (ResilienciaException interrupted) {
@@ -247,6 +247,19 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ResilienciaException("Retry interrupted", e);
+        }
+    }
+
+    /**
+     * A throwing {@code shouldRetry} is logged, not thrown: a bad user predicate must not escape
+     * {@code outcome()}, which is documented to never throw.
+     */
+    private boolean testShouldRetry(Throwable e) {
+        try {
+            return shouldRetry.test(e);
+        } catch (Exception ex) {
+            log.warn("shouldRetry threw while testing {}", e.getClass().getSimpleName(), ex);
+            return false;
         }
     }
 
