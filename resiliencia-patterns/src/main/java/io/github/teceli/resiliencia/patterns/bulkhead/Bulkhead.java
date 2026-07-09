@@ -68,6 +68,9 @@ public final class Bulkhead<T> implements Resilient<T> {
                 Clock.systemClock());
     }
 
+    /**
+     * Maximum number of calls allowed to execute concurrently. Must be at least 1.
+     */
     public Bulkhead<T> withMaxConcurrentCalls(int maxConcurrentCalls) {
         return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
     }
@@ -80,6 +83,10 @@ public final class Bulkhead<T> implements Resilient<T> {
         return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
     }
 
+    /**
+     * Add a listener notified of every {@link BulkheadEvent} emitted by this instance. Listener
+     * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
+     */
     public Bulkhead<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
@@ -94,14 +101,23 @@ public final class Bulkhead<T> implements Resilient<T> {
         return new Bulkhead<>(name, maxConcurrentCalls, maxWait, listeners, clock);
     }
 
+    /**
+     * The name identifying this bulkhead instance, used in events and rejection exceptions.
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * The configured maximum number of concurrent calls.
+     */
     public int maxConcurrentCalls() {
         return maxConcurrentCalls;
     }
 
+    /**
+     * How long an excess call may wait for a permit before being rejected.
+     */
     public Duration maxWait() {
         return maxWait;
     }

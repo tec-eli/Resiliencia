@@ -52,9 +52,11 @@ takes precedence — an exception matched by both is ignored.
 A result predicate (`recordOnResult`) can also record a failure based on the return value, even if no exception was
 thrown.
 
-`Error` is never matched by `recordOn`/`ignoreOn` — it isn't a business failure. See "Error handling" in
-`docs/ARCHITECTURE.md` for the library-wide convention. In HalfOpen, an `Error` still resolves the consumed test-call
-permit (counted as a failed test call) before propagating, so it cannot leak the HalfOpen budget.
+`Error` is never matched by `recordOn`/`ignoreOn` — it isn't a business failure. A `java.lang.Error` signals a
+condition the JVM itself may not recover from, so it is never wrapped into `Outcome.Failure` or evaluated against
+these filters; it always propagates uncaught on the calling thread (library-wide convention, see "Error handling" in
+`docs/architecture/ARCHITECTURE.md`). In HalfOpen, an `Error` still resolves the consumed test-call permit (counted
+as a failed test call) before propagating, so it cannot leak the HalfOpen budget.
 
 ---
 

@@ -79,10 +79,16 @@ public final class RateLimiter<T> implements Resilient<T> {
                 Clock.systemClock());
     }
 
+    /**
+     * Maximum number of calls allowed per {@code period}. Must be at least 1.
+     */
     public RateLimiter<T> withLimit(int limit) {
         return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
+    /**
+     * Length of the fixed window over which {@code limit} calls are allowed. Must be positive.
+     */
     public RateLimiter<T> withPeriod(Duration period) {
         return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
@@ -95,6 +101,11 @@ public final class RateLimiter<T> implements Resilient<T> {
         return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
+    /**
+     * Add a listener notified of every {@link RateLimiterEvent} emitted by this instance.
+     * Listener exceptions are logged and otherwise ignored — a broken listener never affects the
+     * outcome.
+     */
     public RateLimiter<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
@@ -109,18 +120,30 @@ public final class RateLimiter<T> implements Resilient<T> {
         return new RateLimiter<>(name, limit, period, maxWait, listeners, clock);
     }
 
+    /**
+     * The name identifying this rate limiter instance, used in events and rejection exceptions.
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * The configured maximum number of calls per {@code period}.
+     */
     public int limit() {
         return limit;
     }
 
+    /**
+     * The configured length of the fixed window.
+     */
     public Duration period() {
         return period;
     }
 
+    /**
+     * How long an excess call may wait for the next window before being rejected.
+     */
     public Duration maxWait() {
         return maxWait;
     }

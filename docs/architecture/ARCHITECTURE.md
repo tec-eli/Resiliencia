@@ -1,7 +1,8 @@
 # Architecture — resiliencia
 
 Cross-cutting decisions that don't belong to a single pattern spec. This is a living document — edited in place as
-decisions change, not superseded by new files. Pattern-specific behavior and rationale live in `specs/`.
+decisions change, not superseded by new files. Pattern-specific behavior and rationale live in
+`docs/architecture/patterns/`.
 
 ---
 
