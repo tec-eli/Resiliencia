@@ -12,7 +12,8 @@ attempt) and tries again. Two optional backoff modifiers harden this against rea
 `jitterFactor` shifts each delay uniformly within `[delay * (1 - f), delay * (1 + f)]` so clients that failed
 together don't retry together (thundering herd), and `maxDelayMs` clamps every delay — including the initial one,
 and after jitter is applied — preventing unbounded exponential growth. Neither modifier is validated against the
-other: an initial delay above the cap is clamped, not rejected. If the operation succeeds on any attempt, the result is returned normally. If all attempts
+other: an initial delay above the cap is clamped, not rejected. If the operation succeeds on any attempt, the result is
+returned normally. If all attempts
 (or an overall deadline, see below) are exhausted, a `RetryExhaustedException` is thrown carrying the total attempt
 count and the last exception. If `shouldRetry` declines to retry a failure before that point, a distinct
 `RetryRejectedException` is thrown instead — see "Failure" below.
@@ -39,14 +40,14 @@ usable `Retry` instance rather than mutating the receiver):
 
 ```java
 var retry = Retry.<String>create()
-        .withMaxAttempts(3)
-        .withInitialDelay(100)
-        .withBackoffMultiplier(2.0);
-        // Uses default: retries only IOException
+    .withMaxAttempts(3)
+    .withInitialDelay(100)
+    .withBackoffMultiplier(2.0);
+// Uses default: retries only IOException
 
 var customRetry = Retry.<String>create()
-        .withMaxAttempts(3)
-        .withShouldRetry(e -> e instanceof IOException || e instanceof CustomTemporaryException);
+    .withMaxAttempts(3)
+    .withShouldRetry(e -> e instanceof IOException || e instanceof CustomTemporaryException);
 ```
 
 There is no result-based retry (retrying because the returned value matches a predicate) and no separate
@@ -70,16 +71,16 @@ possible oversight, since the total-duration concern has already been addressed 
 
 ## Configuration surface
 
-| Property | Required | Description | Default |
-|---|---|---|---|
-| `maxAttempts` | no | Total attempts including the first call. Must be >= 1 | 3 |
-| `initialDelayMs` | no | Wait before the first retry, in milliseconds. Must be >= 0 | 100 |
-| `backoffMultiplier` | no | Factor the delay is multiplied by after each attempt. Must be >= 1.0 | 2.0 |
-| `maxDelayMs` | no | Hard cap on every backoff delay, applied after jitter. Must be >= 0 | uncapped |
-| `jitterFactor` | no | Uniform randomization of each delay within `±factor`. Must be in [0.0, 1.0] | 0.0 (off) |
-| `overallDeadlineMs` | no | Total wall-clock budget across all attempts and backoff waits, checked between attempts. Must be >= 0 | uncapped |
-| `shouldRetry` | no | Predicate — retry only if it returns true for the thrown exception | `e -> e instanceof IOException` |
-| `listeners` | no | `ResilienceEvent.Listener` instances notified of each `RetryEvent` | none |
+| Property            | Required | Description                                                                                           | Default                         |
+|---------------------|----------|-------------------------------------------------------------------------------------------------------|---------------------------------|
+| `maxAttempts`       | no       | Total attempts including the first call. Must be >= 1                                                 | 3                               |
+| `initialDelayMs`    | no       | Wait before the first retry, in milliseconds. Must be >= 0                                            | 100                             |
+| `backoffMultiplier` | no       | Factor the delay is multiplied by after each attempt. Must be >= 1.0                                  | 2.0                             |
+| `maxDelayMs`        | no       | Hard cap on every backoff delay, applied after jitter. Must be >= 0                                   | uncapped                        |
+| `jitterFactor`      | no       | Uniform randomization of each delay within `±factor`. Must be in [0.0, 1.0]                           | 0.0 (off)                       |
+| `overallDeadlineMs` | no       | Total wall-clock budget across all attempts and backoff waits, checked between attempts. Must be >= 0 | uncapped                        |
+| `shouldRetry`       | no       | Predicate — retry only if it returns true for the thrown exception                                    | `e -> e instanceof IOException` |
+| `listeners`         | no       | `ResilienceEvent.Listener` instances notified of each `RetryEvent`                                    | none                            |
 
 ---
 

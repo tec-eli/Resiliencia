@@ -1,6 +1,6 @@
 # Spec — RateLimiter
 
-Limits the frequency of calls over a time window. Callers wait for a permit; if none is available within the configured 
+Limits the frequency of calls over a time window. Callers wait for a permit; if none is available within the configured
 timeout, the call is rejected.
 
 ---
@@ -10,7 +10,7 @@ timeout, the call is rejected.
 Permits are issued up to `limit` per `period`. At the start of each period the full permit count is
 restored. Unused permits do not carry over to the next period.
 
-When a call arrives, it attempts to acquire a permit. If one is available, the call proceeds immediately. If not, the 
+When a call arrives, it attempts to acquire a permit. If one is available, the call proceeds immediately. If not, the
 caller waits up to `maxWait`. If no permit becomes available within that window, the call is rejected.
 
 `maxWait` of zero means reject immediately if no permit is available.
@@ -19,11 +19,11 @@ caller waits up to `maxWait`. If no permit becomes available within that window,
 
 ## Configuration surface
 
-| Property | Required | Description |
-|---|---|---|
-| `limit` | yes | Maximum calls allowed per period |
-| `period` | yes | How often the permit count resets |
-| `maxWait` | no | How long to wait for a permit before rejecting. Default: no wait |
+| Property  | Required | Description                                                      |
+|-----------|----------|------------------------------------------------------------------|
+| `limit`   | yes      | Maximum calls allowed per period                                 |
+| `period`  | yes      | How often the permit count resets                                |
+| `maxWait` | no       | How long to wait for a permit before rejecting. Default: no wait |
 
 ---
 

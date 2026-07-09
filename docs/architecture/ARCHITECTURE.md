@@ -35,6 +35,7 @@ reusable — not a disposable builder. Each `withX` method returns a new instanc
 dependency injection.
 
 **Rejected alternatives:**
+
 - Configuration records passed to a factory (`Retry.of(new RetryConfig(...))`) — requires users to know a separate
   config class as the primary entry point. May still exist as an internal implementation detail.
 - Annotations (`@WithRetry(maxAttempts = 3)`) — requires a framework/AOP runtime, adds complexity. Could be added
@@ -86,6 +87,7 @@ Resilience patterns have real shared, concurrently-modified state (`CircuitBreak
 non-deterministic and may not reproduce in CI.
 
 `jcstress` lives in its own `resiliencia-stress` module:
+
 - Not published to Maven Central
 - Not run on every PR — run manually before each release (and on the release branch in CI)
 - Complementary to JUnit, not a replacement
