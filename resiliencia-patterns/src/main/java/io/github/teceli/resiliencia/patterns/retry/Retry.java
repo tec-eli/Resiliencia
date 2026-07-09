@@ -69,16 +69,29 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                 List.of(), Clock.systemClock());
     }
 
+    /**
+     * Maximum number of attempts, including the first one — {@code withMaxAttempts(1)} disables
+     * retrying entirely. Must be at least 1. Default: 3.
+     */
     public Retry<T> withMaxAttempts(int maxAttempts) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
                 overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
+    /**
+     * Delay before the first retry attempt. Subsequent delays grow from this base according to
+     * {@link #withBackoffMultiplier}. Must be at least 0. Default: 100ms.
+     */
     public Retry<T> withInitialDelay(long delayMs) {
         return new Retry<>(maxAttempts, delayMs, backoffMultiplier, maxDelayMs, jitterFactor,
                 overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
+    /**
+     * Factor each backoff delay is multiplied by after every failed attempt, producing
+     * exponential growth from {@link #withInitialDelay}. Must be at least 1.0 (1.0 means a
+     * constant delay, no growth). Default: 2.0.
+     */
     public Retry<T> withBackoffMultiplier(double multiplier) {
         return new Retry<>(maxAttempts, initialDelayMs, multiplier, maxDelayMs, jitterFactor,
                 overallDeadlineMs, shouldRetry, listeners, clock);
@@ -116,11 +129,22 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                 overallDeadlineMs, shouldRetry, listeners, clock);
     }
 
+    /**
+     * Decide, for each thrown exception, whether it is worth retrying. Evaluated once per failed
+     * attempt, before the attempt count and deadline are checked. If the predicate itself throws,
+     * that is logged as a warning and treated as {@code false} — a broken predicate rejects the
+     * retry instead of replacing the real exception. Default: retries only {@code IOException}
+     * and its subclasses.
+     */
     public Retry<T> withShouldRetry(Predicate<Throwable> predicate) {
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
                 overallDeadlineMs, predicate, listeners, clock);
     }
 
+    /**
+     * Add a listener notified of every {@link RetryEvent} emitted by this instance. Listener
+     * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
+     */
     public Retry<T> withListener(ResilienceEvent.Listener listener) {
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
@@ -195,7 +219,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             } catch (Exception e) {
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
-                if (attempt < maxAttempts && shouldRetry.test(e) && !deadlineExceeded(startInstant)) {
+                if (attempt < maxAttempts && testShouldRetry(e) && !deadlineExceeded(startInstant)) {
                     try {
                         sleep(Math.min(applyJitter(delayMs), maxDelayMs));
                     } catch (ResilienciaException interrupted) {
@@ -247,6 +271,19 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ResilienciaException("Retry interrupted", e);
+        }
+    }
+
+    /**
+     * A throwing {@code shouldRetry} is logged, not thrown: a bad user predicate must not escape
+     * {@code outcome()}, which is documented to never throw.
+     */
+    private boolean testShouldRetry(Throwable e) {
+        try {
+            return shouldRetry.test(e);
+        } catch (Exception ex) {
+            log.warn("shouldRetry threw while testing {}", e.getClass().getSimpleName(), ex);
+            return false;
         }
     }
 

@@ -111,6 +111,23 @@ class RetryPatternTest {
     }
 
     @Test
+    void should_returnRealFailure_when_shouldRetryThrows() {
+        var retry = Retry.<String>create()
+                .withMaxAttempts(3)
+                .withInitialDelay(10)
+                .withShouldRetry(e -> {
+                    throw new RuntimeException("boom");
+                });
+
+        var outcome = retry.outcome(() -> {
+            throw new IllegalStateException("real failure");
+        });
+
+        assertThat(outcome).isInstanceOfSatisfying(Outcome.Failure.class,
+            failure -> assertThat(failure.cause()).isInstanceOf(IllegalStateException.class));
+    }
+
+    @Test
     void should_stopRetrying_when_overallDeadlineElapsed() {
         var clock = new RecordingClock();
         var events = new ArrayList<RetryEvent>();
@@ -230,6 +247,7 @@ class RetryPatternTest {
                 throw new RuntimeException("Always fails");
             });
         } catch (Exception ignored) {
+            // Exhausted after 4 attempts; only the timing between attempts matters here.
         }
 
         assertThat(attemptTimestamps).hasSize(4);
