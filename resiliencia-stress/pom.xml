@@ -62,6 +62,15 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!--
+                                Without this, shade replaces the main artifact jar in place: on a
+                                second `package` run (no `mvn clean` in between), that already-shaded
+                                jar gets treated as an input to shade again, colliding with the very
+                                dependencies (e.g. JNA, pulled in transitively by jcstress-core)
+                                already merged into it. Attaching the shaded jar as its own
+                                `-shaded` classified artifact instead keeps the main jar untouched.
+                            -->
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.openjdk.jcstress.Main</mainClass>
