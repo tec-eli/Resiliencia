@@ -236,6 +236,48 @@ class PolicyOrderValidationTest {
     }
 
     @Test
+    void should_throwInvalidPolicyException_when_retryWrapsPolicyContainingCircuitBreaker() {
+        // Nesting a Policy must not bypass the guardrail a flat chain would have hit:
+        // Retry -> (CircuitBreaker) is still Retry wrapping CircuitBreaker at runtime.
+        var retry = fakePattern(PatternKind.RETRY);
+        var nestedCircuitBreakerPolicy = Policy.compose(fakePattern(PatternKind.CIRCUIT_BREAKER));
+
+        var composedPolicy = Policy.compose(retry);
+
+        var exception = assertThrows(InvalidPolicyException.class,
+            () -> composedPolicy.and(nestedCircuitBreakerPolicy));
+
+        assertThat(exception.getMessage())
+            .contains("Retry")
+            .contains("CircuitBreaker");
+    }
+
+    @Test
+    void should_throwInvalidPolicyException_when_policyContainingRetryWrapsCircuitBreaker() {
+        // Same guardrail, but the offending pattern (Retry) sits inside the outer nested Policy
+        // instead of the new pattern being added.
+        var nestedRetryPolicy = Policy.compose(fakePattern(PatternKind.RETRY));
+        var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
+
+        var composedPolicy = Policy.compose(nestedRetryPolicy);
+
+        assertThrows(InvalidPolicyException.class, () -> composedPolicy.and(circuitBreaker));
+    }
+
+    @Test
+    void should_logWarnAndSucceed_when_policyContainingTimeoutWrapsPolicyContainingRetry() {
+        var nestedTimeoutPolicy = Policy.compose(fakePattern(PatternKind.TIMEOUT));
+        var nestedRetryPolicy = Policy.compose(fakePattern(PatternKind.RETRY));
+
+        var stderr = captureStdErr(() -> assertThatNoException()
+                .isThrownBy(() -> Policy.compose(nestedTimeoutPolicy).and(nestedRetryPolicy)));
+
+        assertThat(stderr)
+                .contains("WARN")
+                .contains("Timeout wraps Retry");
+    }
+
+    @Test
     void should_throwInvalidPolicyException_when_useOptimumOrderReceivesNoPatterns() {
         var exception = assertThrows(InvalidPolicyException.class, Policy::<String>useOptimumOrder);
         assertThat(exception).hasMessageContaining("at least one pattern");

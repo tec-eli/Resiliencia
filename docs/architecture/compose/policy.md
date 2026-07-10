@@ -45,6 +45,15 @@ Pattern identity for this check comes from `Resilient<T>.patternKind()` (see `co
 enum, not `instanceof` (fragile against future decorators/wrappers) and not the observability-facing
 `patternName(): String` (typo-prone, no compiler safety).
 
+**Nested Policy.** A `Policy` is itself a `Resilient` and can be composed into another `Policy` via `.and(...)`.
+Because `Policy` reports `PatternKind.CUSTOM` (the `Resilient` default — it never overrides `patternKind()`), a naive
+check against a nested `Policy`'s own kind would never see what it actually contains, silently bypassing the
+guardrail for exactly the pairings it exists to catch. Instead, `Policy` flattens: before checking a rule, it
+recursively expands every pattern already in the chain, and the pattern being added, into the set of `PatternKind`s
+they actually contribute — descending into any nested `Policy` — and checks the rule against those flattened sets.
+A `Retry` composed around a `Policy` that internally contains a `CircuitBreaker` is rejected exactly as if the
+`CircuitBreaker` had been added directly, no matter how many levels of nesting sit in between.
+
 Both `Policy.compose(x).and(y)...` and `Policy.useOptimumOrder(...)` go through the same guardrail.
 `useOptimumOrder()` is a second entry point onto the same `Policy` type — not a separate builder — and is not a
 silent reordering mechanism: `Policy` never reorders a user-supplied chain.
@@ -139,3 +148,5 @@ So: hard failure for pairings with no legitimate use, a warning for pairings tha
 - No new `PatternKind` values were needed for the Bulkhead/RateLimiter pairs above — they reuse the existing enum.
 - All 6 ordering rules in the table above are implemented in `Policy.ORDERING_RULES`, and Retry's overall-deadline
   field (`withOverallDeadline(...)`, `hasOwnDeadline()`) is implemented — see `retry.md`.
+- Nested-`Policy` flattening for order validation (see above) is implemented in `Policy.flattenKinds(...)`,
+  exercised by `PolicyOrderValidationTest`.
