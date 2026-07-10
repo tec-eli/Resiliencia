@@ -1,0 +1,72 @@
+name: Merge Gate
+
+# This repo is private on GitHub's free tier, so classic branch protection / required status
+# checks are unavailable (Settings > Branches returns 403 "Upgrade to GitHub Pro"). This workflow
+# is the closest approximation: it closes a PR when Test Validation fails - a closed PR cannot be
+# merged from the GitHub UI - and reopens it once a later push passes.
+#
+# Draft-conversion (the less disruptive option) was tried first, but the `convertPullRequestToDraft`
+# GraphQL mutation is rejected for the default Actions token ("Resource not accessible by
+# integration") regardless of granted permissions - GitHub only allows it for PAT-authenticated
+# requests. Close/reopen uses the plain REST pulls endpoint, which the default token can call.
+#
+# Caveat: GitHub does not fire `pull_request: synchronize` for pushes to a closed PR's branch, so
+# Test Validation won't re-run automatically after a fix - reopen the PR (`gh pr reopen <n>`) to
+# get it re-evaluated; this workflow will then re-close or leave it open based on the new result.
+#
+# `workflow_run` only fires for workflow files present on the default branch, so this gate is only
+# active repo-wide once this file is merged into main. The `workflow_dispatch` trigger exists so the
+# same gating logic can be exercised manually against an existing PR before that merge happens.
+on:
+  workflow_run:
+    workflows: [ "Test Validation" ]
+    types: [ completed ]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to gate"
+        required: true
+      conclusion:
+        description: "Simulated Test Validation conclusion"
+        required: true
+        default: "failure"
+        type: choice
+        options:
+          - success
+          - failure
+
+permissions:
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'pull_request'
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion || inputs.conclusion }}
+    steps:
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          number=$(gh pr list --repo "${{ github.repository }}" --state open \
+            --json number,headRefOid --jq '.[] | select(.headRefOid=="${{ github.event.workflow_run.head_sha }}") | .number' \
+            | head -n1)
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Block merge (close PR) on failure
+        if: steps.pr.outputs.number != '' && env.CONCLUSION == 'failure'
+        run: |
+          gh pr comment "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" \
+            --body "Merge gate: Test Validation failed, closing this PR so it can't be merged. Push a fix and run \`gh pr reopen ${{ steps.pr.outputs.number }}\` to re-run the check."
+          gh pr close "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}"
+
+      - name: Unblock merge (comment) on success
+        if: steps.pr.outputs.number != '' && env.CONCLUSION == 'success'
+        run: |
+          gh pr comment "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" \
+            --body "Merge gate: Test Validation passed."

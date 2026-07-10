@@ -149,8 +149,8 @@ class RetryPatternTest {
         }));
 
         // attempt 1 (t=0, deadline not reached) -> sleep 100 -> attempt 2 (t=100, deadline not
-        // reached) -> sleep 200 -> attempt 3 (t=300, deadline of 150 elapsed) -> stop.
-        assertThat(exception.attemptCount()).isEqualTo(3);
+        // reached) -> sleep 200 -> recheck at t=300, deadline of 150 elapsed -> stop before attempt 3.
+        assertThat(exception.attemptCount()).isEqualTo(2);
         assertThat(events).last().isInstanceOf(RetryEvent.Exhausted.class);
     }
 
