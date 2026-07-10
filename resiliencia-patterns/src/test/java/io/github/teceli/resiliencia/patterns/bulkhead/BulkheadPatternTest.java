@@ -84,6 +84,70 @@ class BulkheadPatternTest {
     }
 
     @Test
+    void should_rejectCall_when_maxWaitExpiresWithoutPermitBecomingAvailable() throws Exception {
+        var bulkhead = Bulkhead.<String>of("bulkhead",1).withMaxWait(Duration.ofMillis(100));
+        var holderInside = new CountDownLatch(1);
+        var releaseHolder = new CountDownLatch(1);
+
+        var holder = Thread.ofVirtual().start(() -> bulkhead.call(() -> {
+            holderInside.countDown();
+            awaitQuietly(releaseHolder);
+            return "holder";
+        }));
+        assertThat(holderInside.await(5, TimeUnit.SECONDS)).isTrue();
+
+        var exception = assertThrows(BulkheadFullException.class, () ->
+                bulkhead.call(() -> "should_timeout_waiting"));
+
+        assertThat(exception.maxConcurrentCalls()).isEqualTo(1);
+        assertThat(exception.maxWait()).isEqualTo(Duration.ofMillis(100));
+
+        releaseHolder.countDown();
+        holder.join(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void should_returnFailureWithInterruptFlag_when_threadInterruptedWhileWaitingForPermit()
+            throws Exception {
+        var bulkhead = Bulkhead.<String>of("bulkhead",1).withMaxWait(Duration.ofSeconds(10));
+        var holderInside = new CountDownLatch(1);
+        var releaseHolder = new CountDownLatch(1);
+
+        var holder = Thread.ofVirtual().start(() -> bulkhead.call(() -> {
+            holderInside.countDown();
+            awaitQuietly(releaseHolder);
+            return "holder";
+        }));
+        assertThat(holderInside.await(5, TimeUnit.SECONDS)).isTrue();
+
+        var waiterThread = new AtomicReference<Thread>();
+        var outcomeRef = new AtomicReference<Outcome<String>>();
+        var waiterStarted = new CountDownLatch(1);
+        var waiter = Thread.ofVirtual().start(() -> {
+            waiterThread.set(Thread.currentThread());
+            waiterStarted.countDown();
+            outcomeRef.set(bulkhead.outcome(() -> "should_be_interrupted"));
+        });
+
+        assertThat(waiterStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        Thread.sleep(50); // Give waiter time to start waiting on the semaphore
+        waiter.interrupt();
+
+        waiter.join(Duration.ofSeconds(5));
+
+        // The outcome should be a Failure with a ResilientException about interruption
+        var outcome = outcomeRef.get();
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.Failure.class, f ->
+                        assertThat(f.cause())
+                                .isInstanceOf(ResilientException.class)
+                                .hasMessageContaining("Interrupted"));
+
+        releaseHolder.countDown();
+        holder.join(Duration.ofSeconds(5));
+    }
+
+    @Test
     void should_releasePermit_when_operationFails() {
         var bulkhead = Bulkhead.<String>of("bulkhead",1);
 
@@ -92,6 +156,30 @@ class BulkheadPatternTest {
         }));
 
         assertThat(bulkhead.call(() -> "recovered")).isEqualTo("recovered");
+    }
+
+    @Test
+    void should_releasePermitOnError_when_operationThrowsError() {
+        var bulkhead = Bulkhead.<String>of("bulkhead",1);
+        var events = new ArrayList<BulkheadEvent>();
+        var bulkheadWithListener = bulkhead.withListener(event -> events.add((BulkheadEvent) event));
+
+        // First call throws an Error subclass
+        var error = new LinkageError("boom");
+        var caughtError = assertThrows(LinkageError.class, () ->
+                bulkheadWithListener.call(() -> {
+                    throw error;
+                }));
+        assertThat(caughtError).isSameAs(error);
+
+        // The permit must have been released, so a second call should succeed
+        assertThat(bulkheadWithListener.call(() -> "recovered")).isEqualTo("recovered");
+
+        // Verify that a Finished event was emitted after the Error, confirming permit release
+        var finishedEvents = events.stream()
+                .filter(BulkheadEvent.Finished.class::isInstance)
+                .toList();
+        assertThat(finishedEvents).hasSize(2);
     }
 
     @Test
