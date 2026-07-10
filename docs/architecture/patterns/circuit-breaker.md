@@ -34,6 +34,21 @@ Transitions:
 The current state is inspectable at any time. The `Open` state carries the timestamp it was entered and the remaining
 wait duration.
 
+### HalfOpen admission under concurrent bursts
+
+`permittedCallsInHalfOpenState` caps admission for calls that are evaluated *while the circuit is observed to be
+HalfOpen*. It is not a hard cap on a logical burst of concurrent calls: once enough admitted test calls succeed to
+close the circuit, `HalfOpen → Closed` happens immediately, and Closed admits unconditionally by design. Other calls
+from the very same burst that make their first admission check only after that transition are evaluated against the
+new Closed state, not the HalfOpen episode they raced against, and are admitted like any other Closed call.
+
+Under heavy concurrent contention with fast operations, this can let more calls through than
+`permittedCallsInHalfOpenState` for a single HalfOpen episode. This is an inherent trade-off of a lock-free admission
+check with no synchronization barrier between callers: bounding it exactly would require callers to register intent
+before the breaker decides to close, which is not part of the calling contract (same limitation other lock-free
+circuit breaker implementations have). In practice this only matters for calls racing the exact HalfOpen-to-Closed
+transition instant — normal traffic is spread out enough in time that the boundary is never contended this way.
+
 ### Rate thresholds
 
 Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
