@@ -1,0 +1,69 @@
+name: Merge Gate
+
+# This repo is private on GitHub's free tier, so classic branch protection / required status
+# checks are unavailable (Settings > Branches returns 403 "Upgrade to GitHub Pro"). This workflow
+# is the closest approximation: it converts a PR to Draft when Test Validation fails, since Draft
+# PRs cannot be merged from the GitHub UI, and converts it back to Ready when a later push passes.
+#
+# `workflow_run` only fires for workflow files present on the default branch, so this gate is only
+# active repo-wide once this file is merged into main. The `workflow_dispatch` trigger exists so the
+# same gating logic can be exercised manually against an existing PR before that merge happens.
+on:
+  workflow_run:
+    workflows: [ "Test Validation" ]
+    types: [ completed ]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to gate"
+        required: true
+      conclusion:
+        description: "Simulated Test Validation conclusion"
+        required: true
+        default: "failure"
+        type: choice
+        options:
+          - success
+          - failure
+
+permissions:
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'pull_request'
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion || inputs.conclusion }}
+    steps:
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          number=$(gh pr list --repo "${{ github.repository }}" --state open \
+            --json number,headRefOid --jq '.[] | select(.headRefOid=="${{ github.event.workflow_run.head_sha }}") | .number' \
+            | head -n1)
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure ci-blocked label exists
+        if: steps.pr.outputs.number != ''
+        run: gh label create ci-blocked --repo "${{ github.repository }}" --color b60205 --description "Auto-converted to Draft: Test Validation is failing" --force
+
+      - name: Block merge (convert to Draft) on failure
+        if: steps.pr.outputs.number != '' && env.CONCLUSION == 'failure'
+        run: |
+          gh pr ready "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --undo
+          gh pr edit "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --add-label ci-blocked
+
+      - name: Unblock merge (mark Ready) on success
+        if: steps.pr.outputs.number != '' && env.CONCLUSION == 'success'
+        run: |
+          labels=$(gh pr view "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name')
+          if echo "$labels" | grep -qx "ci-blocked"; then
+            gh pr ready "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}"
+            gh pr edit "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --remove-label ci-blocked
+          fi
