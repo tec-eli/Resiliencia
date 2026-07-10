@@ -334,9 +334,19 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 }
                 yield tryAcquirePermission();
             }
-            case CircuitState.HalfOpen halfOpen -> slot.permitsIssued.incrementAndGet() <= permittedCallsInHalfOpenState
-                ? null
-                : CircuitBreakerOpenException.forHalfOpenState(name);
+            case CircuitState.HalfOpen halfOpen -> {
+                // Use CAS loop to ensure only admitted calls increment the counter.
+                // Rejected calls must not be counted.
+                while (true) {
+                    var issued = slot.permitsIssued.get();
+                    if (issued >= permittedCallsInHalfOpenState) {
+                        yield CircuitBreakerOpenException.forHalfOpenState(name);
+                    }
+                    if (slot.permitsIssued.compareAndSet(issued, issued + 1)) {
+                        yield null;
+                    }
+                }
+            }
         };
     }
 

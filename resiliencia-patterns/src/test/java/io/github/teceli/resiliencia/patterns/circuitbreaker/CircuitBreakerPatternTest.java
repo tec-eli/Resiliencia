@@ -614,6 +614,62 @@ class CircuitBreakerPatternTest {
                         }));
     }
 
+    @Test
+    void should_notCountRejectedCalls_when_permitsExhaustedUnderContention() throws Exception {
+        var clock = new ManualClock();
+        final var permittedCalls = 3;
+        var circuitBreaker = CircuitBreaker.<String>of("contention-test")
+                .withSlidingWindowSize(2)
+                .withFailureRateThreshold(0.5)
+                .withWaitDurationInOpenState(WAIT_DURATION)
+                .withPermittedCallsInHalfOpenState(permittedCalls)
+                .withClock(clock);
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        clock.advance(WAIT_DURATION);
+
+        // Spawn many threads trying to call simultaneously
+        final var threadCount = 10;
+        var allReady = new CountDownLatch(threadCount);
+        var allDone = new CountDownLatch(threadCount);
+        var outcomes = new AtomicReference<Outcome<String>[]>(new Outcome[threadCount]);
+        var outcomesArray = outcomes.get();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            Thread.ofVirtual().start(() -> {
+                try {
+                    allReady.countDown();
+                    allReady.await(); // Synchronize all threads to maximize contention
+                    outcomesArray[index] = circuitBreaker.outcome(() -> "test-" + index);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    outcomesArray[index] = new Outcome.Failure<>(new IllegalStateException("interrupted", e));
+                } finally {
+                    allDone.countDown();
+                }
+            });
+        }
+
+        assertThat(allDone.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // Count successes and failures
+        var successCount = 0;
+        var rejectedCount = 0;
+        for (var outcome : outcomesArray) {
+            if (outcome instanceof Outcome.Success<?>) {
+                successCount++;
+            } else if (outcome instanceof Outcome.Failure<?> f &&
+                    f.cause() instanceof CircuitBreakerOpenException) {
+                rejectedCount++;
+            }
+        }
+
+        // Invariant: exactly permittedCalls should be admitted, rest rejected
+        assertThat(successCount).isEqualTo(permittedCalls);
+        assertThat(rejectedCount).isEqualTo(threadCount - permittedCalls);
+    }
+
     /**
      * A fresh, Closed CircuitBreaker configured with a window of size 2 and a 50% failure-rate
      * threshold, using the given clock. Apply further {@code withX} calls (e.g. a listener)
