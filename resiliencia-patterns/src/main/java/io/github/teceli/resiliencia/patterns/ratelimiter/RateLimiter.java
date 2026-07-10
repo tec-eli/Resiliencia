@@ -201,7 +201,9 @@ public final class RateLimiter<T> implements Resilient<T> {
      * deadline can no longer be met.
      */
     private AcquireOutcome tryAcquire() throws InterruptedException {
-        var deadline = clock.instant().plus(maxWait);
+        // Clamp maxWait to prevent overflow in Instant.plus(); see Bulkhead for same pattern.
+        var maxWaitClamped = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : maxWait;
+        var deadline = clock.instant().plus(maxWaitClamped);
         while (true) {
             Duration untilWindowEnd;
             synchronized (lock) {
