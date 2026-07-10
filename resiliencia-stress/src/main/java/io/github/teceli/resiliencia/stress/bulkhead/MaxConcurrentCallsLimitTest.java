@@ -5,6 +5,7 @@ import org.openjdk.jcstress.annotations.Actor;
 import org.openjdk.jcstress.annotations.Arbiter;
 import org.openjdk.jcstress.annotations.Expect;
 import org.openjdk.jcstress.annotations.JCStressTest;
+import org.openjdk.jcstress.annotations.Outcome;
 import org.openjdk.jcstress.annotations.State;
 import org.openjdk.jcstress.infra.results.I_Result;
 
@@ -22,8 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @JCStressTest
 @State
-@org.openjdk.jcstress.annotations.Outcome(id = "2", expect = Expect.ACCEPTABLE, desc = "Max concurrent calls respected: at most 2.")
-@org.openjdk.jcstress.annotations.Outcome(expect = Expect.FORBIDDEN, desc = "Concurrency limit violated: more than 2 concurrent calls.")
+@Outcome(id = "2", expect = Expect.ACCEPTABLE, desc = "Max concurrent calls respected: at most 2.")
+@Outcome(expect = Expect.FORBIDDEN, desc = "Concurrency limit violated: more than 2 concurrent calls.")
 public class MaxConcurrentCallsLimitTest {
 
     private static final int MAX_CONCURRENT = 2;

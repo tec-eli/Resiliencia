@@ -7,7 +7,7 @@ import org.openjdk.jcstress.annotations.Arbiter;
 import org.openjdk.jcstress.annotations.Expect;
 import org.openjdk.jcstress.annotations.JCStressTest;
 import org.openjdk.jcstress.annotations.State;
-import org.openjdk.jcstress.infra.results.III_Result;
+import org.openjdk.jcstress.infra.results.II_Result;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @JCStressTest
 @State
-@org.openjdk.jcstress.annotations.Outcome(id = "3, 6, 0", expect = Expect.ACCEPTABLE,
-         desc = "All 3 permits used, 6 calls rejected, 0 errors.")
+@org.openjdk.jcstress.annotations.Outcome(id = "3, 6", expect = Expect.ACCEPTABLE,
+         desc = "All 3 permits used, 6 calls rejected.")
 @org.openjdk.jcstress.annotations.Outcome(expect = Expect.FORBIDDEN,
          desc = "Unexpected: permits exceeded, or total calls mismatch.")
 public class MultiPermitConcurrencyTest {
@@ -32,14 +32,13 @@ public class MultiPermitConcurrencyTest {
 
     private final AtomicInteger admittedCount = new AtomicInteger(0);
     private final AtomicInteger rejectedCount = new AtomicInteger(0);
-    private final AtomicInteger errorCount = new AtomicInteger(0);
 
     private final Bulkhead<String> bulkhead = Bulkhead.<String>of(
         "stress-multi-permit-concurrency", MAX_CONCURRENT);
 
     /**
-     * Attempts to execute an operation through the bulkhead. Tracks admits,
-     * rejections, and errors.
+     * Attempts to execute an operation through the bulkhead. Tracks admits
+     * and rejections.
      */
     private void attemptCall() {
         var outcome = bulkhead.outcome(() -> {
@@ -112,13 +111,11 @@ public class MultiPermitConcurrencyTest {
 
     /**
      * Captures final counts: {@code r.r1 = admittedCount} (expect 3),
-     * {@code r.r2 = rejectedCount} (expect 6), {@code r.r3 = errorCount}
-     * (expect 0).
+     * {@code r.r2 = rejectedCount} (expect 6).
      */
     @Arbiter
-    public void arbiter(III_Result r) {
+    public void arbiter(II_Result r) {
         r.r1 = admittedCount.get();
         r.r2 = rejectedCount.get();
-        r.r3 = errorCount.get();
     }
 }
