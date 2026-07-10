@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Fluent composition of multiple resilience patterns.
@@ -186,11 +188,20 @@ public final class Policy<T> implements Resilient<T> {
     /**
      * Check the pattern being added (the new innermost layer) against every pattern already in
      * the chain, applying each matching {@link OrderingRule}.
+     *
+     * If the outer chain or the new pattern is itself a {@code Policy}, it is recursively
+     * flattened into the {@link PatternKind}s it actually contains, so a Retry nested inside a
+     * sub-Policy (or a CircuitBreaker hidden inside one) is still visible to the transitive check
+     * — nesting a Policy must not bypass the guardrail a flat chain would have hit.
      */
     private static <T> void validateOrdering(List<Resilient<T>> outerPatterns, Resilient<T> newPattern) {
+        Set<PatternKind> outerKinds = outerPatterns.stream()
+                .flatMap(outer -> flattenKinds(outer).stream())
+                .collect(Collectors.toSet());
+        var newKinds = flattenKinds(newPattern);
+
         for (var rule : ORDERING_RULES) {
-            if (rule.inner() == newPattern.patternKind() &&
-                outerPatterns.stream().anyMatch(outer -> outer.patternKind() == rule.outer())) {
+            if (newKinds.contains(rule.inner()) && outerKinds.contains(rule.outer())) {
                 if (rule.severity() == OrderingRule.Severity.ERROR) {
                     throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
                 } else if (rule.severity() == OrderingRule.Severity.WARN && !rule.suppressWhen().test(newPattern)) {
@@ -198,6 +209,19 @@ public final class Policy<T> implements Resilient<T> {
                 }
             }
         }
+    }
+
+    /**
+     * The set of {@link PatternKind}s a pattern actually contributes to a chain: its own kind, or
+     * — if it is itself a nested {@code Policy} — the flattened kinds of everything inside it.
+     */
+    private static <T> List<PatternKind> flattenKinds(Resilient<T> pattern) {
+        if (pattern instanceof Policy<T> nested) {
+            return nested.patterns.stream()
+                    .flatMap(inner -> flattenKinds(inner).stream())
+                    .toList();
+        }
+        return List.of(pattern.patternKind());
     }
 
     /**
