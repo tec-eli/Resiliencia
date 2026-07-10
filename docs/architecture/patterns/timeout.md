@@ -38,6 +38,15 @@ the operation holds resources that must be released cleanly.
 - **AbandonedWorkerFailed** — a worker abandoned after `TimedOut` eventually threw. Carries: the thrown cause.
   Observability only, same as above.
 
+`AbandonedWorkerSucceeded` / `AbandonedWorkerFailed` are best-effort and may be missed. Right at the deadline
+boundary, the caller (deciding whether the worker already finished) and the worker (deciding whether the deadline
+already passed) each resolve that boundary independently. If the caller concludes the deadline passed — taking the
+`TimedOut` path, which never inspects the worker's result again — while the worker, an instant earlier, concluded it
+was still within budget and skipped its own event on the assumption that the caller's normal-completion path would
+emit `Succeeded`/`Failed` instead, then neither event is emitted for that execution. This never affects the caller:
+it still reliably gets exactly one `Outcome`/exception. Only the abandoned worker's eventual disposition may go
+unreported.
+
 ---
 
 ## Failure
