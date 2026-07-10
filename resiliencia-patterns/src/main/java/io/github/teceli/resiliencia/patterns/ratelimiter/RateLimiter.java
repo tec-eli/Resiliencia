@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * RateLimiter pattern: bound how many calls may start per time window (fixed window,
@@ -41,9 +42,14 @@ public final class RateLimiter<T> implements Resilient<T> {
     private final List<ResilienceEvent.Listener> listeners;
     private final Clock clock;
 
-    private final Object lock = new Object();
-    private Instant windowStart; // guarded by lock
-    private int used;            // guarded by lock
+    private final AtomicReference<WindowState> state;
+
+    /**
+     * Atomic source of truth for the window state: window start time and used permits.
+     * All updates use CAS (Compare-And-Set) to ensure atomicity under concurrent access.
+     */
+    private record WindowState(Instant windowStart, int used) {
+    }
 
     private RateLimiter(String name, int limit, Duration period, Duration maxWait,
                         List<ResilienceEvent.Listener> listeners, Clock clock) {
@@ -66,7 +72,7 @@ public final class RateLimiter<T> implements Resilient<T> {
         this.maxWait = maxWait;
         this.listeners = List.copyOf(listeners);
         this.clock = clock;
-        this.windowStart = clock.instant();
+        this.state = new AtomicReference<>(new WindowState(clock.instant(), 0));
     }
 
     /**
@@ -206,15 +212,25 @@ public final class RateLimiter<T> implements Resilient<T> {
         var deadline = clock.instant().plus(maxWaitClamped);
         while (true) {
             Duration untilWindowEnd;
-            synchronized (lock) {
-                var now = clock.instant();
-                advanceWindow(now);
-                if (used < limit) {
-                    used++;
-                    return AcquireOutcome.acquired(limit - used);
+            var now = clock.instant();
+
+            // Read current state and attempt to acquire a permit via CAS loop
+            WindowState current = state.get();
+            var advanced = advanceWindow(current, now);
+            if (advanced.used < limit) {
+                // Try to acquire: increment used
+                var newState = new WindowState(advanced.windowStart, advanced.used + 1);
+                if (state.compareAndSet(current, newState)) {
+                    // Success: acquired a permit
+                    return AcquireOutcome.acquired(limit - newState.used);
                 }
-                untilWindowEnd = Duration.between(now, windowStart.plus(period));
+                // CAS failed, retry the loop
+                continue;
             }
+
+            // Window is full, calculate time until next window
+            untilWindowEnd = Duration.between(now, advanced.windowStart.plus(period));
+
             if (clock.instant().plus(untilWindowEnd).isAfter(deadline)) {
                 return AcquireOutcome.rejected(untilWindowEnd);
             }
@@ -224,6 +240,25 @@ public final class RateLimiter<T> implements Resilient<T> {
                     untilWindowEnd.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : untilWindowEnd.toMillis();
             clock.sleep(Math.max(1, untilWindowEndMillis));
         }
+    }
+
+    /**
+     * Advance the window in whole periods so windows stay aligned to the creation instant,
+     * resetting the used count when a new window is entered.
+     *
+     * @param current the current window state
+     * @param now     the current time
+     * @return a WindowState with advanced windowStart and reset used (if period passed), or
+     *         the same as current if no period has passed
+     */
+    private WindowState advanceWindow(WindowState current, Instant now) {
+        var elapsed = Duration.between(current.windowStart, now);
+        if (elapsed.compareTo(period) >= 0) {
+            var periodsElapsed = elapsed.dividedBy(period);
+            var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
+            return new WindowState(newWindowStart, 0);
+        }
+        return current;
     }
 
     /**
@@ -237,19 +272,6 @@ public final class RateLimiter<T> implements Resilient<T> {
 
         static AcquireOutcome rejected(Duration estimatedWait) {
             return new AcquireOutcome(false, 0, estimatedWait);
-        }
-    }
-
-    /**
-     * Advance the window in whole periods so windows stay aligned to the creation instant,
-     * resetting the used count when a new window is entered. Must be called under the lock.
-     */
-    private void advanceWindow(Instant now) {
-        var elapsed = Duration.between(windowStart, now);
-        if (elapsed.compareTo(period) >= 0) {
-            var periodsElapsed = elapsed.dividedBy(period);
-            windowStart = windowStart.plus(period.multipliedBy(periodsElapsed));
-            used = 0;
         }
     }
 
