@@ -6,11 +6,13 @@
 this repository. Follow these conventions consistently. Do not refactor existing code or suggest architectural
 changes unless explicitly requested.
 
-**Source of truth for behavior and design decisions:** `docs/*.md`, grouped in a subfolder per module (one file per
-concept — `docs/core/core.md`; `docs/patterns/{retry,timeout,circuit-breaker,bulkhead,rate-limiter}.md`;
-`docs/compose/policy.md`) and `docs/ARCHITECTURE.md` (cross-cutting decisions: virtual threads, module system,
-jcstress, module strategy, no global registry). Both are living documents — if this file and a spec ever disagree,
-the spec wins. The project is on a early stage so this can be changed if there is a better approach.
+**Source of truth for behavior and design decisions:** `docs/architecture/*.md`, grouped in a subfolder per module
+(one file per concept — `docs/architecture/core/core.md`;
+`docs/architecture/patterns/{retry,timeout,circuit-breaker,bulkhead,rate-limiter}.md`;
+`docs/architecture/compose/policy.md`) and `docs/architecture/ARCHITECTURE.md` (cross-cutting decisions: virtual
+threads, module system, jcstress, module strategy, no global registry). Both are living documents — if this file and
+a spec ever disagree, the spec wins. The project is on a early stage so this can be changed if there is a better
+approach.
 
 ### Handling spec gaps
 
@@ -58,7 +60,7 @@ open-ended one. Do not proceed with an assumption on unresolved design questions
 
 **resiliencia** is a multi-module Maven project organized by concerns, not layers. Each Maven module has its own
 `module-info.java` enforcing encapsulation at compile time. Full rationale for all of the below lives in
-`docs/ARCHITECTURE.md`.
+`docs/architecture/ARCHITECTURE.md`.
 
 ### Module structure
 
@@ -122,7 +124,7 @@ not just adjacent):
   footgun if the user wanted an overall retry-loop deadline (not modeled yet).
 
 Use `Resilient<T>.patternKind()` for this kind of internal check, never `instanceof` and never the observability
-`patternName(): String`. See `docs/compose/policy.md` for full rationale before touching this logic.
+`patternName(): String`. See `docs/architecture/compose/policy.md` for full rationale before touching this logic.
 
 ---
 
