@@ -16,8 +16,8 @@ composed via `resiliencia-compose`. This module depends only on `resiliencia-cor
 - `RateLimiter` — window-based request throttling.
 - Fluent builder per pattern producing immutable, reusable instances (`XxxPattern.create()...`).
 - Typed events per pattern (e.g. `RetryEvent`) for observability, consumed by `resiliencia-metrics` and
-  user listeners — no logging dependency here.
-- Unchecked exceptions per pattern, all extending `ResilienciaException`.
+  user listeners.
+- Unchecked exceptions per pattern, all extending `ResilientException`.
 
 ## Non-goals
 
@@ -26,9 +26,3 @@ composed via `resiliencia-compose`. This module depends only on `resiliencia-cor
 - No framework-specific wiring (Spring/Quarkus/Micronaut annotations) — see the respective integration
   modules.
 - No domain-specific behavior (e.g. LLM provider retry semantics) — belongs in consumer code.
-
-## Java 25
-
-Bulkhead and Timeout ship an additional multi-release JAR variant (`META-INF/versions/25/`) using
-`StructuredTaskScope`. CircuitBreaker, RateLimiter, and Retry do not — they don't benefit from structured
-concurrency and keep a single implementation across Java versions.

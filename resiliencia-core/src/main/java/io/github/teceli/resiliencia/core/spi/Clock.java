@@ -18,6 +18,10 @@ public interface Clock {
 
     /**
      * Suspend the calling thread for the given duration, as measured by this clock.
+     * Deliberately mirrors {@link Thread#sleep(long)}'s checked {@link InterruptedException}
+     * rather than wrapping it in a resiliencia exception: callers already have an established,
+     * idiomatic interruption protocol (catch, restore the interrupt flag, react) to follow here,
+     * and every caller in this codebase does exactly that at the call site.
      */
     void sleep(long millis) throws InterruptedException;
 
