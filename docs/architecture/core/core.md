@@ -52,6 +52,7 @@ context as typed fields — not just a message string.
 |-------------------------------|--------------------------|--------------------------------------|
 | `RetryExhaustedException`     | Retry                    | attempt count, last cause            |
 | `RetryRejectedException`      | Retry                    | attempt count, last cause            |
+| `RetryInterruptedException`   | Retry                    | attempt count, last cause            |
 | `ResilienciaTimeoutException` | Timeout                  | configured limit                     |
 | `CircuitBreakerOpenException` | CircuitBreaker           | name, open since, remaining wait     |
 | `BulkheadFullException`       | Bulkhead                 | name, max concurrent calls, max wait |

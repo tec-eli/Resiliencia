@@ -151,8 +151,8 @@ Use `Resilient<T>.patternKind()` for this kind of internal check, never `instanc
 ### Error handling
 
 Hierarchy: `ResilienciaException` (base) extends `RuntimeException`, with `RetryExhaustedException`,
-`RetryRejectedException`, `ResilienciaTimeoutException`, `CircuitBreakerOpenException`, `BulkheadFullException`,
-`RateLimiterException`, `InvalidPolicyException` as subtypes.
+`RetryRejectedException`, `RetryInterruptedException`, `ResilienciaTimeoutException`, `CircuitBreakerOpenException`,
+`BulkheadFullException`, `RateLimiterException`, `InvalidPolicyException` as subtypes.
 
 - **Specific exceptions:** catch individual exceptions for fine-grained control
 - **General catch:** use `ResilienciaException` to catch all library-related failures

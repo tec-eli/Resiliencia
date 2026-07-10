@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -188,12 +189,11 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             // execute() never produces TimedOut (an inner Timeout pattern surfaces as a Failure
             // cause instead); the case exists only for exhaustiveness over the sealed Outcome.
             case Outcome.TimedOut<T>(Duration timeout) -> throw new ResilientTimeoutException(timeout);
-            case Outcome.Failure<T>(Throwable cause) -> {
-                if (result.rejected()) {
-                    throw new RetryRejectedException(result.attempts(), cause);
-                }
-                throw new RetryExhaustedException(result.attempts(), cause);
-            }
+            case Outcome.Failure<T>(Throwable cause) -> throw switch (result.failureKind()) {
+                case REJECTED -> new RetryRejectedException(result.attempts(), cause);
+                case INTERRUPTED -> new RetryInterruptedException(result.attempts(), cause);
+                case EXHAUSTED -> new RetryExhaustedException(result.attempts(), cause);
+            };
         };
     }
 
@@ -204,8 +204,8 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
 
     /**
      * Runs the retry loop once, returning both the outcome and the number of attempts made.
-     * The attempt count is needed by {@link #call} to build a {@link RetryExhaustedException} or
-     * {@link RetryRejectedException}; {@code rejected} tells {@link #call} which of the two applies.
+     * The attempt count is needed by {@link #call} to build one of the three Retry exceptions;
+     * {@code failureKind} tells {@link #call} which one applies.
      */
     private ExecutionResult<T> execute(Operation<T> operation) {
         long delayMs = initialDelayMs;
@@ -215,30 +215,37 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             try {
                 var result = operation.execute();
                 emit(new RetryEvent.Success(clock.instant(), attempt));
-                return new ExecutionResult<>(new Outcome.Success<>(result), attempt, false);
+                return new ExecutionResult<>(new Outcome.Success<>(result), attempt, FailureKind.EXHAUSTED);
             } catch (Exception e) {
                 emit(new RetryEvent.AttemptFailed(clock.instant(), attempt, e));
 
-                if (attempt < maxAttempts && testShouldRetry(e) && !deadlineExceeded(startInstant)) {
-                    try {
-                        sleep(Math.min(applyJitter(delayMs), maxDelayMs));
-                    } catch (ResilientException interrupted) {
-                        return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt, false);
-                    }
-                    // Re-check deadline after sleep: if it passed, stop immediately without attempting
-                    // another operation, in line with the promise in docs/patterns/retry.md:62-64
-                    if (deadlineExceeded(startInstant)) {
-                        emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
-                        return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, false);
-                    }
-                    delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
-                } else if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
-                    emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, false);
-                } else {
+                // shouldRetry is evaluated before the attempt count and deadline, per its contract
+                // (see withShouldRetry Javadoc) — a non-retryable exception is Rejected even on the
+                // last attempt, not misreported as Exhausted.
+                if (!testShouldRetry(e)) {
                     emit(new RetryEvent.Rejected(clock.instant(), attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, true);
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.REJECTED);
                 }
+
+                if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
+                    emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
+                }
+
+                try {
+                    sleep(Math.min(applyJitter(delayMs), maxDelayMs));
+                } catch (InterruptedDuringBackoff interrupted) {
+                    emit(new RetryEvent.Interrupted(clock.instant(), attempt, e));
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED);
+                }
+
+                // Re-check deadline after sleep: if it passed, stop immediately without attempting
+                // another operation, in line with the promise in docs/patterns/retry.md:62-64
+                if (deadlineExceeded(startInstant)) {
+                    emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
+                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
+                }
+                delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
             }
         }
 
@@ -256,7 +263,10 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
         return !clock.instant().isBefore(startInstant.plusMillis(overallDeadlineMs));
     }
 
-    private record ExecutionResult<T>(Outcome<T> outcome, int attempts, boolean rejected) {}
+    private record ExecutionResult<T>(Outcome<T> outcome, int attempts, FailureKind failureKind) {}
+
+    /** Outcomes for {@link #execute}: which of the three Retry exceptions {@link #call} should throw. */
+    private enum FailureKind { EXHAUSTED, REJECTED, INTERRUPTED }
 
     /**
      * Shifts the delay by a uniformly random offset in {@code [-delay * jitterFactor, +delay * jitterFactor]}.
@@ -276,7 +286,21 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             clock.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilientException("Retry interrupted", e);
+            throw new InterruptedDuringBackoff();
+        }
+    }
+
+    /**
+     * Internal control-flow signal only — never exposed to callers. Carries no message or cause;
+     * {@link #execute} already holds the real failure ({@code e}) that becomes the
+     * {@link RetryInterruptedException} cause once caught.
+     */
+    private static final class InterruptedDuringBackoff extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        InterruptedDuringBackoff() {
+            super(null, null, false, false);
         }
     }
 
