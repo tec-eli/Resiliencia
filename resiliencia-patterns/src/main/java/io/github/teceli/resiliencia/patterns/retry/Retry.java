@@ -225,6 +225,12 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                     } catch (ResilientException interrupted) {
                         return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt, false);
                     }
+                    // Re-check deadline after sleep: if it passed, stop immediately without attempting
+                    // another operation, in line with the promise in docs/patterns/retry.md:62-64
+                    if (deadlineExceeded(startInstant)) {
+                        emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
+                        return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, false);
+                    }
                     delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
                 } else if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
                     emit(new RetryEvent.Exhausted(clock.instant(), attempt, e));
