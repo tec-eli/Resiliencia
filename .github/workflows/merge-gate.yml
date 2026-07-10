@@ -2,8 +2,17 @@ name: Merge Gate
 
 # This repo is private on GitHub's free tier, so classic branch protection / required status
 # checks are unavailable (Settings > Branches returns 403 "Upgrade to GitHub Pro"). This workflow
-# is the closest approximation: it converts a PR to Draft when Test Validation fails, since Draft
-# PRs cannot be merged from the GitHub UI, and converts it back to Ready when a later push passes.
+# is the closest approximation: it closes a PR when Test Validation fails - a closed PR cannot be
+# merged from the GitHub UI - and reopens it once a later push passes.
+#
+# Draft-conversion (the less disruptive option) was tried first, but the `convertPullRequestToDraft`
+# GraphQL mutation is rejected for the default Actions token ("Resource not accessible by
+# integration") regardless of granted permissions - GitHub only allows it for PAT-authenticated
+# requests. Close/reopen uses the plain REST pulls endpoint, which the default token can call.
+#
+# Caveat: GitHub does not fire `pull_request: synchronize` for pushes to a closed PR's branch, so
+# Test Validation won't re-run automatically after a fix - reopen the PR (`gh pr reopen <n>`) to
+# get it re-evaluated; this workflow will then re-close or leave it open based on the new result.
 #
 # `workflow_run` only fires for workflow files present on the default branch, so this gate is only
 # active repo-wide once this file is merged into main. The `workflow_dispatch` trigger exists so the
@@ -49,23 +58,15 @@ jobs:
             | head -n1)
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
-      - name: Ensure ci-blocked label exists
-        if: steps.pr.outputs.number != ''
-        run: |
-          gh label create ci-blocked --repo "${{ github.repository }}" --color b60205 \
-            --description "Auto-converted to Draft - Test Validation is failing" --force
-
-      - name: Block merge (convert to Draft) on failure
+      - name: Block merge (close PR) on failure
         if: steps.pr.outputs.number != '' && env.CONCLUSION == 'failure'
         run: |
-          gh pr ready "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --undo
-          gh pr edit "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --add-label ci-blocked
+          gh pr comment "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" \
+            --body "Merge gate: Test Validation failed, closing this PR so it can't be merged. Push a fix and run \`gh pr reopen ${{ steps.pr.outputs.number }}\` to re-run the check."
+          gh pr close "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}"
 
-      - name: Unblock merge (mark Ready) on success
+      - name: Unblock merge (comment) on success
         if: steps.pr.outputs.number != '' && env.CONCLUSION == 'success'
         run: |
-          labels=$(gh pr view "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name')
-          if echo "$labels" | grep -qx "ci-blocked"; then
-            gh pr ready "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}"
-            gh pr edit "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" --remove-label ci-blocked
-          fi
+          gh pr comment "${{ steps.pr.outputs.number }}" --repo "${{ github.repository }}" \
+            --body "Merge gate: Test Validation passed."
