@@ -225,6 +225,18 @@ public final class Policy<T> implements Resilient<T> {
     }
 
     /**
+     * True if any pattern in this chain has its own deadline, checked recursively through nested
+     * {@code Policy} patterns. Without this override, a Retry configured with
+     * {@code withOverallDeadline(...)} but nested inside a sub-{@code Policy} would report
+     * {@code false} here (the {@link Resilient} default), silently defeating the Timeout-wraps-Retry
+     * WARN suppression that the same Retry would get in a flat chain.
+     */
+    @Override
+    public boolean hasOwnDeadline() {
+        return patterns.stream().anyMatch(Resilient::hasOwnDeadline);
+    }
+
+    /**
      * Execute the operation through the pattern chain on the calling thread, blocking until complete.
      * Returns the result, or throws whichever exception the innermost failing pattern throws.
      * Policy propagates RuntimeExceptions (including all ResilientException subtypes) as-is, without wrapping.

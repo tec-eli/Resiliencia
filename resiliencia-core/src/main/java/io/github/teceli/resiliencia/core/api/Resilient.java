@@ -26,7 +26,10 @@ public interface Resilient<T> {
     /**
      * Execute an operation asynchronously on a new virtual thread and return a handle to its
      * result. The future completes with the value of {@link #call}, or exceptionally with
-     * whatever {@link #call} throws.
+     * whatever {@link #call} throws. If {@link #call} lets an {@code Error} propagate, the future
+     * is still completed exceptionally with it (so a waiter on the future is not left hanging),
+     * but the {@code Error} is also rethrown on the worker thread afterward — it is never treated
+     * as a recoverable business outcome (see "Error handling" in {@code docs/architecture/ARCHITECTURE.md}).
      *
      * Cancelling the returned future interrupts the virtual thread, so cancellation propagates
      * through whichever pattern is currently blocking — a Timeout wait, a Retry backoff, a
@@ -38,8 +41,15 @@ public interface Resilient<T> {
         var worker = Thread.ofVirtual().name("resiliencia-async").start(() -> {
             try {
                 future.complete(call(operation));
-            } catch (Throwable t) {
-                future.completeExceptionally(t);
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            } catch (Error e) {
+                // Not treated as a business outcome (see "Error handling" in
+                // docs/architecture/ARCHITECTURE.md): the future is still completed so any
+                // waiter is unblocked, but the Error is rethrown afterward instead of being
+                // silently absorbed, so it still propagates uncaught on this worker thread.
+                future.completeExceptionally(e);
+                throw e;
             }
         });
         future.whenComplete((result, error) -> {

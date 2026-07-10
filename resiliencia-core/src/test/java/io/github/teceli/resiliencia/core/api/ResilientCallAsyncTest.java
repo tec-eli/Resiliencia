@@ -76,6 +76,36 @@ class ResilientCallAsyncTest {
         assertThat(future.isCancelled()).isTrue();
     }
 
+    @Test
+    void should_completeExceptionallyAndRethrowOnWorkerThread_when_operationThrowsError() throws Exception {
+        var boom = new OutOfMemoryError("simulated");
+        var originalHandler = Thread.getDefaultUncaughtExceptionHandler();
+        var uncaught = new CountDownLatch(1);
+        var uncaughtThrowable = new AtomicReference<Throwable>();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            uncaughtThrowable.set(e);
+            uncaught.countDown();
+        });
+
+        try {
+            var future = passthrough().callAsync(() -> {
+                throw boom;
+            });
+
+            assertThatExceptionOfType(ExecutionException.class)
+                    .isThrownBy(() -> future.get(5, TimeUnit.SECONDS))
+                    .withCause(boom);
+
+            assertThat(uncaught.await(5, TimeUnit.SECONDS))
+                    .as("the Error must still propagate uncaught on the worker thread, not just complete "
+                            + "the future — it is never treated as a recoverable business outcome")
+                    .isTrue();
+            assertThat(uncaughtThrowable.get()).isSameAs(boom);
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(originalHandler);
+        }
+    }
+
     /**
      * Minimal Resilient implementation so the interface's default callAsync is what's under test.
      */

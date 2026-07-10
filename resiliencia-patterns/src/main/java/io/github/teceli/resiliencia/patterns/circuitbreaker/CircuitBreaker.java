@@ -399,8 +399,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     private void open(StateSlot from, CircuitBreakerEvent.Reason reason) {
-        if (current.compareAndSet(from, new StateSlot(new CircuitState.Open(clock.instant(), waitDurationInOpenState)))) {
-            emit(new CircuitBreakerEvent.Opened(clock.instant(), name, reason));
+        // Captured once so the Open state's openedAt and the Opened event's timestamp always
+        // agree on the exact instant the circuit opened, instead of two separate clock reads.
+        var openedAt = clock.instant();
+        if (current.compareAndSet(from, new StateSlot(new CircuitState.Open(openedAt, waitDurationInOpenState)))) {
+            emit(new CircuitBreakerEvent.Opened(openedAt, name, reason));
         }
     }
 
