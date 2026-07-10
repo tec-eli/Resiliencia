@@ -2,7 +2,6 @@ package io.github.teceli.resiliencia.patterns.retry;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
-import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -346,7 +346,8 @@ class RetryPatternTest {
     }
 
     @Test
-    void should_returnFailureOutcome_when_interruptedDuringBackoff() {
+    void should_preserveRealCauseAndInterruptFlag_when_interruptedDuringBackoff() {
+        var cause = new RuntimeException("Always fails");
         var retry = Retry.<String>create()
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
@@ -354,12 +355,77 @@ class RetryPatternTest {
                 .withClock(new InterruptingClock());
 
         var outcome = retry.outcome(() -> {
-            throw new RuntimeException("Always fails");
+            throw cause;
         });
 
         assertThat(outcome).isInstanceOfSatisfying(Outcome.Failure.class, f ->
-                assertThat(f.cause()).isInstanceOf(ResilientException.class));
+                assertThat(f.cause()).isSameAs(cause));
         assertThat(Thread.interrupted()).isTrue();
+    }
+
+    @Test
+    void should_throwRetryInterruptedException_when_interruptedDuringBackoff() {
+        var cause = new RuntimeException("Always fails");
+        var events = new ArrayList<RetryEvent>();
+        var retry = Retry.<String>create()
+                .withMaxAttempts(3)
+                .withInitialDelay(10)
+                .withShouldRetry(e -> true)
+                .withClock(new InterruptingClock())
+                .withListener(event -> {
+                    if (event instanceof RetryEvent re) {
+                        events.add(re);
+                    }
+                });
+
+        var exception = assertThrows(RetryInterruptedException.class, () -> retry.call(() -> {
+            throw cause;
+        }));
+
+        assertThat(exception).hasCause(cause);
+        assertThat(exception.attemptCount()).isEqualTo(1);
+        assertThat(Thread.interrupted()).isTrue();
+        assertThat(events).last().isInstanceOfSatisfying(RetryEvent.Interrupted.class, interrupted ->
+                assertThat(interrupted.lastError()).isSameAs(cause));
+    }
+
+    @Test
+    void should_throwRetryRejectedException_when_shouldRetryDeclinesOnLastAttempt() {
+        var counter = new AtomicInteger(0);
+
+        // shouldRetry is evaluated before the attempt-count check, per its documented contract:
+        // a non-retryable exception on the last attempt is still Rejected, not Exhausted.
+        var retry = Retry.<String>create()
+                .withMaxAttempts(1)
+                .withInitialDelay(10);
+
+        var exception = assertThrows(RetryRejectedException.class, () -> retry.call(() -> {
+            counter.incrementAndGet();
+            throw new IllegalStateException("Not retryable");
+        }));
+        assertThat(exception)
+                .hasCauseInstanceOf(IllegalStateException.class);
+        assertThat(exception.attemptCount()).isEqualTo(1);
+
+        assertThat(counter.get()).isEqualTo(1);
+    }
+
+    @Test
+    void should_rejectInvalidMaxAttemptsInitialDelayAndBackoffMultiplier_when_configured() {
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withMaxAttempts(0));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withInitialDelay(-1));
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> Retry.<String>create().withBackoffMultiplier(0.9));
+    }
+
+    @Test
+    void should_rejectNullShouldRetryAndClock_when_configured() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> Retry.<String>create().withShouldRetry(null));
+        assertThatNullPointerException()
+            .isThrownBy(() -> Retry.<String>create().withClock(null));
     }
 
     /**

@@ -7,16 +7,19 @@ Retries a failed operation a configurable number of times with optional waiting 
 ## Behavior
 
 On each failure, Retry checks `shouldRetry` — a single `Predicate<Throwable>` — to decide whether the exception is
-eligible for retry. If it is, and attempts remains, it waits (the delay grows by `backoffMultiplier` after each
-attempt) and tries again. Two optional backoff modifiers harden this against real-world failure storms:
-`jitterFactor` shifts each delay uniformly within `[delay * (1 - f), delay * (1 + f)]` so clients that failed
-together don't retry together (thundering herd), and `maxDelayMs` clamps every delay — including the initial one,
-and after jitter is applied — preventing unbounded exponential growth. Neither modifier is validated against the
-other: an initial delay above the cap is clamped, not rejected. If the operation succeeds on any attempt, the result is
-returned normally. If all attempts
-(or an overall deadline, see below) are exhausted, a `RetryExhaustedException` is thrown carrying the total attempt
-count and the last exception. If `shouldRetry` declines to retry a failure before that point, a distinct
-`RetryRejectedException` is thrown instead — see "Failure" below.
+eligible for retry. This check runs **before** the attempt count and deadline are checked, on every attempt including
+the last one: a non-retryable exception always yields `RetryRejectedException`, even if it happens to occur on the
+final attempt (where it would otherwise look like exhaustion). If the exception is retryable, and attempts remain, it
+waits (the delay grows by `backoffMultiplier` after each attempt) and tries again. Two optional backoff modifiers
+harden this against real-world failure storms: `jitterFactor` shifts each delay uniformly within
+`[delay * (1 - f), delay * (1 + f)]` so clients that failed together don't retry together (thundering herd), and
+`maxDelayMs` clamps every delay — including the initial one, and after jitter is applied — preventing unbounded
+exponential growth. Neither modifier is validated against the other: an initial delay above the cap is clamped, not
+rejected. If the operation succeeds on any attempt, the result is returned normally. If all attempts (or an overall
+deadline, see below) are exhausted, a `RetryExhaustedException` is thrown carrying the total attempt count and the
+last exception. If `shouldRetry` declines to retry a failure before that point, a distinct `RetryRejectedException`
+is thrown instead. If the thread is interrupted while waiting for a backoff delay, a third distinct
+`RetryInterruptedException` is thrown instead of either — see "Failure" below.
 
 ### Exception classification: Transient vs. Permanent failures
 
@@ -67,6 +70,17 @@ When configured, `Retry.hasOwnDeadline()` returns `true`, which suppresses `Poli
 warning — composing an outer `Timeout` around a `Retry` with its own overall deadline is no longer read as a
 possible oversight, since the total-duration concern has already been addressed on `Retry` itself.
 
+### Interruption during backoff
+
+If the thread is interrupted while sleeping between attempts, the retry loop stops immediately: it does not treat
+this as the attempt budget running out, since it wasn't. The thread's interrupt status is restored (so callers doing
+their own interruption-aware work downstream still observe it), `RetryEvent.Interrupted` is emitted, and `call()`
+throws `RetryInterruptedException` carrying the total attempt count and the **last real failure** — the exception
+from the attempt that was about to be retried when the interrupt arrived, not a wrapper around the interrupt itself.
+This keeps the original failure reachable via `getCause()` the same way the other two Retry exceptions do, while
+still letting callers distinguish "interrupted" (e.g. graceful shutdown, cancellation) from both "ran out of budget"
+(`RetryExhaustedException`) and "this failure was never eligible for retry" (`RetryRejectedException`).
+
 ---
 
 ## Configuration surface
@@ -94,14 +108,19 @@ Retry emits a `RetryEvent` after each significant moment:
   Carries: timestamp, total attempts, the last exception.
 - **Rejected** — `shouldRetry` declined to retry a failure before the attempt budget (count or deadline) was
   exhausted. Carries: timestamp, attempt number, the rejected exception.
+- **Interrupted** — the thread was interrupted while waiting for a backoff delay. Carries: timestamp, attempt
+  number, the last real failure (not the interrupt itself).
 
 ---
 
 ## Failure
 
 Throws `RetryExhaustedException` when all attempts (or the overall deadline) are exhausted. Throws
-`RetryRejectedException` when `shouldRetry` declines to retry a failure before that point — a distinct type so
-callers can tell "genuinely ran out of budget" apart from "this failure was never eligible for retry."
+`RetryRejectedException` when `shouldRetry` declines to retry a failure before that point. Throws
+`RetryInterruptedException` when the thread is interrupted while waiting for a backoff delay, before either of the
+other two conditions is reached. Three distinct types so callers can tell "genuinely ran out of budget" apart from
+"this failure was never eligible for retry" apart from "something interrupted the wait, unrelated to the failure
+itself." All three carry the attempt count and the relevant cause via `getCause()`.
 
 ---
 
