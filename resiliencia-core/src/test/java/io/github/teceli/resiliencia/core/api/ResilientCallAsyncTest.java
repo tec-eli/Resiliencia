@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 /**
  * Unit tests for the default {@link Resilient#callAsync} implementation: virtual-thread
@@ -74,6 +75,11 @@ class ResilientCallAsyncTest {
                 .as("cancelling the future should interrupt the worker thread")
                 .isTrue();
         assertThat(future.isCancelled()).isTrue();
+    }
+
+    @Test
+    void should_throwNullPointerException_when_operationIsNull() {
+        assertThatNullPointerException().isThrownBy(() -> passthrough().callAsync(null));
     }
 
     /**

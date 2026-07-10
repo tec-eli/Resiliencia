@@ -346,6 +346,47 @@ class RetryPatternTest {
     }
 
     @Test
+    void should_neverRetry_when_maxAttemptsIsOne_evenForARetryableException() {
+        var counter = new AtomicInteger(0);
+        var retry = Retry.<String>create()
+                .withMaxAttempts(1)
+                .withShouldRetry(e -> true);
+
+        var exception = assertThrows(RetryExhaustedException.class, () -> retry.call(() -> {
+            counter.incrementAndGet();
+            throw new RuntimeException("Always fails");
+        }));
+
+        assertThat(exception.attemptCount()).isEqualTo(1);
+        assertThat(counter.get())
+                .as("maxAttempts(1) disables retrying entirely, even though shouldRetry allows it")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void should_stopAtWhicheverComesFirst_when_overallDeadlineJitterAndMaxDelayAllConfigured() {
+        var clock = new RecordingClock();
+        var retry = Retry.<String>create()
+                .withMaxAttempts(10)
+                .withInitialDelay(100)
+                .withBackoffMultiplier(2.0)
+                .withJitter(0.5)
+                .withMaxDelay(150)
+                .withOverallDeadline(300)
+                .withShouldRetry(e -> true)
+                .withClock(clock);
+
+        var exception = assertThrows(RetryExhaustedException.class, () -> retry.call(() -> {
+            throw new RuntimeException("Always fails");
+        }));
+
+        // Every recorded sleep must still respect the maxDelay cap despite jitter, and the loop
+        // must stop once the overall deadline is exceeded rather than running all 10 attempts.
+        assertThat(clock.sleeps).allSatisfy(sleep -> assertThat(sleep).isBetween(0L, 150L));
+        assertThat(exception.attemptCount()).isLessThan(10);
+    }
+
+    @Test
     void should_preserveRealCauseAndInterruptFlag_when_interruptedDuringBackoff() {
         var cause = new RuntimeException("Always fails");
         var retry = Retry.<String>create()
