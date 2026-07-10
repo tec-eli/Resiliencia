@@ -51,7 +51,9 @@ jobs:
 
       - name: Ensure ci-blocked label exists
         if: steps.pr.outputs.number != ''
-        run: gh label create ci-blocked --repo "${{ github.repository }}" --color b60205 --description "Auto-converted to Draft: Test Validation is failing" --force
+        run: |
+          gh label create ci-blocked --repo "${{ github.repository }}" --color b60205 \
+            --description "Auto-converted to Draft - Test Validation is failing" --force
 
       - name: Block merge (convert to Draft) on failure
         if: steps.pr.outputs.number != '' && env.CONCLUSION == 'failure'
