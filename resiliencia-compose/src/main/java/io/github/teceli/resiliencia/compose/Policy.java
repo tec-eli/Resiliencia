@@ -202,9 +202,9 @@ public final class Policy<T> implements Resilient<T> {
 
     /**
      * Execute the operation through the pattern chain on the calling thread, blocking until complete.
-     * Returns the result, or throws the original ResilienciaException subtype produced by whichever
-     * pattern failed (e.g. RetryExhaustedException), falling back to a generic ResilienciaException
-     * for any other unchecked exception.
+     * Returns the result, or throws whichever exception the innermost failing pattern throws.
+     * Policy propagates RuntimeExceptions (including all ResilientException subtypes) as-is, without wrapping.
+     * For Throwable types that are not RuntimeException (e.g., Error), wraps in ResilientException as a safety net.
      *
      * @throws ResilientException if the operation fails after passing through the pattern chain
      */
@@ -213,8 +213,9 @@ public final class Policy<T> implements Resilient<T> {
         return switch (outcome(operation)) {
             case Outcome.Success<T>(T value) -> value;
             case Outcome.TimedOut<T>(var timeout) -> throw new ResilientTimeoutException(timeout);
-            case Outcome.Failure<T>(ResilientException cause) -> throw cause;
-            case Outcome.Failure<T>(Throwable cause) -> throw new ResilientException("Policy execution failed", cause);
+            case Outcome.Failure<T>(RuntimeException cause) -> throw cause;
+            case Outcome.Failure<T>(Throwable cause) ->
+                    throw new ResilientException("Policy execution failed", cause);
         };
     }
 

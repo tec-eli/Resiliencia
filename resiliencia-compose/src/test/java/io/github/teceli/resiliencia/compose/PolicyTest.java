@@ -180,33 +180,30 @@ class PolicyTest {
     }
 
     @Test
-    void should_wrapInGenericException_when_operationThrowsWithoutAnyPattern() {
+    void should_propagateOriginalRuntimeException_when_patternDoesNotWrap() {
         Resilient<String> passthrough = new Resilient<>() {
             @Override
             public String call(Operation<String> operation) throws ResilientException {
-                try {
-                    return operation.execute();
-                } catch (RuntimeException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new ResilientException("passthrough failed", e);
-                }
+                return operation.execute();
             }
 
             @Override
             public Outcome<String> outcome(Operation<String> operation) {
-                throw new UnsupportedOperationException();
+                try {
+                    return new Outcome.Success<>(operation.execute());
+                } catch (Exception e) {
+                    return new Outcome.Failure<>(e);
+                }
             }
         };
 
         var policy = Policy.compose(passthrough);
 
-        var exception = assertThrows(ResilientException.class, () -> policy.call(() -> {
-            throw new IllegalArgumentException("not a resiliencia exception");
+        var exception = assertThrows(IllegalArgumentException.class, () -> policy.call(() -> {
+            throw new IllegalArgumentException("non-wrapped exception");
         }));
         assertThat(exception)
-                .isNotInstanceOf(RetryExhaustedException.class)
-                .hasCauseInstanceOf(IllegalArgumentException.class);
+                .hasMessage("non-wrapped exception");
     }
 
     @Test
@@ -222,6 +219,37 @@ class PolicyTest {
 
         assertThrows(NullPointerException.class, () ->
             policy.and(null));
+    }
+
+    @Test
+    void should_returnFailureWithOriginalCause_when_outcomeMethodUsedWithNonResilientException() {
+        var passthroughPattern = new Resilient<String>() {
+            @Override
+            public String call(Operation<String> operation) throws ResilientException {
+                return operation.execute();
+            }
+
+            @Override
+            public Outcome<String> outcome(Operation<String> operation) {
+                try {
+                    return new Outcome.Success<>(operation.execute());
+                } catch (Exception e) {
+                    return new Outcome.Failure<>(e);
+                }
+            }
+        };
+
+        var policy = Policy.compose(passthroughPattern);
+
+        var outcome = policy.outcome(() -> {
+            throw new IllegalArgumentException("original non-resiliencia exception");
+        });
+
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.Failure.class, failure ->
+                        assertThat(failure.cause())
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessage("original non-resiliencia exception"));
     }
 
     private static Resilient<String> recordingPattern(List<String> callOrder, String name) {
