@@ -63,7 +63,7 @@ class ResilientCallAsyncTest {
             } catch (InterruptedException e) {
                 interrupted.countDown();
                 Thread.currentThread().interrupt();
-                throw new ResilienciaException("interrupted", e);
+                throw new ResilientException("interrupted", e);
             }
         });
         assertThat(operationStarted.await(5, TimeUnit.SECONDS)).isTrue();
@@ -82,7 +82,7 @@ class ResilientCallAsyncTest {
     private static Resilient<String> passthrough() {
         return new Resilient<>() {
             @Override
-            public String call(Operation<String> operation) throws ResilienciaException {
+            public String call(Operation<String> operation) throws ResilientException {
                 return operation.execute();
             }
 

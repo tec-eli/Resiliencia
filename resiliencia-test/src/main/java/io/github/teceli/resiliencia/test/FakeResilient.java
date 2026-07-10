@@ -3,7 +3,7 @@ package io.github.teceli.resiliencia.test;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -70,7 +70,7 @@ public final class FakeResilient<T> implements Resilient<T> {
     }
 
     @Override
-    public T call(Operation<T> operation) throws ResilienciaException {
+    public T call(Operation<T> operation) throws ResilientException {
         Objects.requireNonNull(operation, "operation must not be null");
         callCount.incrementAndGet();
         onCall.run();

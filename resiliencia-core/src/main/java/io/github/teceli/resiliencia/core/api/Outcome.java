@@ -24,7 +24,7 @@ public sealed interface Outcome<T> {
 
     /**
      * Fold over the outcome: apply one function if Success, another if Failure.
-     * A TimedOut outcome folds as a failure, passing a {@link ResilienciaTimeoutException}
+     * A TimedOut outcome folds as a failure, passing a {@link ResilientTimeoutException}
      * carrying the exceeded timeout to {@code onFailure}.
      */
     default <U> U fold(java.util.function.Function<T, U> onSuccess,
@@ -32,7 +32,7 @@ public sealed interface Outcome<T> {
         return switch (this) {
             case Success<T>(T value) -> onSuccess.apply(value);
             case Failure<T>(Throwable cause) -> onFailure.apply(cause);
-            case TimedOut<T>(Duration timeout) -> onFailure.apply(new ResilienciaTimeoutException(timeout));
+            case TimedOut<T>(Duration timeout) -> onFailure.apply(new ResilientTimeoutException(timeout));
         };
     }
 }

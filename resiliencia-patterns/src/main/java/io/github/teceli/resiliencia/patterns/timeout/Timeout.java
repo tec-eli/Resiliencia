@@ -3,8 +3,8 @@ package io.github.teceli.resiliencia.patterns.timeout;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Timeout pattern: execute an operation on a virtual thread and bound how long the caller
  * waits for it. When the deadline passes and {@link #cancelOnTimeout} is true (the default), the
  * worker thread is interrupted — a real cancellation signal, not polling. Either way the caller
- * gets a {@link ResilienciaTimeoutException} (or {@link Outcome.TimedOut} via {@link #outcome})
+ * gets a {@link ResilientTimeoutException} (or {@link Outcome.TimedOut} via {@link #outcome})
  * immediately once the deadline passes. Whether the operation actually stops depends on it
  * responding to interruption; the caller is unblocked either way.
  *
@@ -100,13 +100,13 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
     }
 
     @Override
-    public T call(Operation<T> operation) throws ResilienciaException {
+    public T call(Operation<T> operation) throws ResilientException {
         return switch (outcome(operation)) {
             case Outcome.Success<T>(T value) -> value;
-            case Outcome.TimedOut<T> timedOut -> throw new ResilienciaTimeoutException(timedOut.timeout());
+            case Outcome.TimedOut<T> timedOut -> throw new ResilientTimeoutException(timedOut.timeout());
             case Outcome.Failure<T>(RuntimeException cause) -> throw cause;
             case Outcome.Failure<T>(Throwable cause) ->
-                    throw new ResilienciaException("Operation failed within timeout", cause);
+                    throw new ResilientException("Operation failed within timeout", cause);
         };
     }
 
@@ -138,7 +138,7 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
             worker.interrupt();
             Thread.currentThread().interrupt();
             return new Outcome.Failure<>(
-                    new ResilienciaException("Interrupted while waiting for operation to complete", e));
+                    new ResilientException("Interrupted while waiting for operation to complete", e));
         }
 
         if (!finished) {

@@ -3,8 +3,8 @@ package io.github.teceli.resiliencia.compose;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -206,15 +206,15 @@ public final class Policy<T> implements Resilient<T> {
      * pattern failed (e.g. RetryExhaustedException), falling back to a generic ResilienciaException
      * for any other unchecked exception.
      *
-     * @throws ResilienciaException if the operation fails after passing through the pattern chain
+     * @throws ResilientException if the operation fails after passing through the pattern chain
      */
     @Override
-    public T call(Operation<T> operation) throws ResilienciaException {
+    public T call(Operation<T> operation) throws ResilientException {
         return switch (outcome(operation)) {
             case Outcome.Success<T>(T value) -> value;
-            case Outcome.TimedOut<T>(var timeout) -> throw new ResilienciaTimeoutException(timeout);
-            case Outcome.Failure<T>(ResilienciaException cause) -> throw cause;
-            case Outcome.Failure<T>(Throwable cause) -> throw new ResilienciaException("Policy execution failed", cause);
+            case Outcome.TimedOut<T>(var timeout) -> throw new ResilientTimeoutException(timeout);
+            case Outcome.Failure<T>(ResilientException cause) -> throw cause;
+            case Outcome.Failure<T>(Throwable cause) -> throw new ResilientException("Policy execution failed", cause);
         };
     }
 
@@ -228,7 +228,7 @@ public final class Policy<T> implements Resilient<T> {
         try {
             var result = chainedOp.execute();
             return new Outcome.Success<>(result);
-        } catch (ResilienciaTimeoutException e) {
+        } catch (ResilientTimeoutException e) {
             return new Outcome.TimedOut<>(e.timeout());
         } catch (Exception e) {
             return new Outcome.Failure<>(e);

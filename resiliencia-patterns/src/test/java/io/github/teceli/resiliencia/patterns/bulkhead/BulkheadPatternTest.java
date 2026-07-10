@@ -2,7 +2,7 @@ package io.github.teceli.resiliencia.patterns.bulkhead;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -254,7 +254,7 @@ class BulkheadPatternTest {
             latch.await();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilienciaException("interrupted", e);
+            throw new ResilientException("interrupted", e);
         }
     }
 
@@ -263,7 +263,7 @@ class BulkheadPatternTest {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilienciaException("interrupted", e);
+            throw new ResilientException("interrupted", e);
         }
     }
 }

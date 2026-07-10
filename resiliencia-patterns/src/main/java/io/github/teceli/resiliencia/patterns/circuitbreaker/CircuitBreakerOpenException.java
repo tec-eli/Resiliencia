@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.patterns.circuitbreaker;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 import java.time.Duration;
@@ -13,7 +13,7 @@ import java.util.Optional;
  * {@code openSince} and {@code remainingWait} are only present in the Open case — a HalfOpen
  * rejection has nothing equivalent to report, since the circuit is already attempting test calls.
  */
-public final class CircuitBreakerOpenException extends ResilienciaException {
+public final class CircuitBreakerOpenException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

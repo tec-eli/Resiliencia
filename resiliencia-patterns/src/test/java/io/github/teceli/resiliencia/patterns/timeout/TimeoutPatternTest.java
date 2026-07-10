@@ -2,8 +2,8 @@ package io.github.teceli.resiliencia.patterns.timeout;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -38,7 +38,7 @@ class TimeoutPatternTest {
     void should_throwResilienciaTimeoutException_when_operationExceedsTimeout() {
         var timeout = Timeout.<String>of(SHORT_TIMEOUT);
 
-        var exception = assertThrows(ResilienciaTimeoutException.class, () ->
+        var exception = assertThrows(ResilientTimeoutException.class, () ->
             timeout.call(TimeoutPatternTest::blockUntilInterrupted));
         assertThat(exception.timeout()).isEqualTo(SHORT_TIMEOUT);
     }
@@ -48,14 +48,14 @@ class TimeoutPatternTest {
         var interrupted = new CountDownLatch(1);
         var timeout = Timeout.<String>of(SHORT_TIMEOUT);
 
-        assertThrows(ResilienciaTimeoutException.class, () -> timeout.call(() -> {
+        assertThrows(ResilientTimeoutException.class, () -> timeout.call(() -> {
             try {
                 Thread.sleep(Duration.ofSeconds(30));
                 return "never";
             } catch (InterruptedException e) {
                 interrupted.countDown();
                 Thread.currentThread().interrupt();
-                throw new ResilienciaException("interrupted", e);
+                throw new ResilientException("interrupted", e);
             }
         }));
 
@@ -75,7 +75,7 @@ class TimeoutPatternTest {
         var completedNaturally = new CountDownLatch(1);
         var timeout = Timeout.<String>of(SHORT_TIMEOUT).withCancelOnTimeout(false);
 
-        assertThrows(ResilienciaTimeoutException.class, () -> timeout.call(() -> {
+        assertThrows(ResilientTimeoutException.class, () -> timeout.call(() -> {
             try {
                 Thread.sleep(Duration.ofMillis(200));
                 completedNaturally.countDown();
@@ -83,7 +83,7 @@ class TimeoutPatternTest {
             } catch (InterruptedException e) {
                 interrupted.countDown();
                 Thread.currentThread().interrupt();
-                throw new ResilienciaException("interrupted", e);
+                throw new ResilientException("interrupted", e);
             }
         }));
 
@@ -183,7 +183,7 @@ class TimeoutPatternTest {
                 .filteredOn(TimeoutEvent.AbandonedWorkerFailed.class::isInstance)
                 .singleElement()
                 .isInstanceOfSatisfying(TimeoutEvent.AbandonedWorkerFailed.class, f ->
-                        assertThat(f.cause()).isInstanceOf(ResilienciaException.class));
+                        assertThat(f.cause()).isInstanceOf(ResilientException.class));
     }
 
     @Test
@@ -282,7 +282,7 @@ class TimeoutPatternTest {
             return "never";
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilienciaException("interrupted", e);
+            throw new ResilientException("interrupted", e);
         }
     }
 }

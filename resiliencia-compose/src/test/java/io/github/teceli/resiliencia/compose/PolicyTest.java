@@ -2,7 +2,7 @@ package io.github.teceli.resiliencia.compose;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.patterns.retry.Retry;
 import io.github.teceli.resiliencia.patterns.retry.RetryEvent;
 import io.github.teceli.resiliencia.patterns.retry.RetryExhaustedException;
@@ -183,13 +183,13 @@ class PolicyTest {
     void should_wrapInGenericException_when_operationThrowsWithoutAnyPattern() {
         Resilient<String> passthrough = new Resilient<>() {
             @Override
-            public String call(Operation<String> operation) throws ResilienciaException {
+            public String call(Operation<String> operation) throws ResilientException {
                 try {
                     return operation.execute();
                 } catch (RuntimeException e) {
                     throw e;
                 } catch (Exception e) {
-                    throw new ResilienciaException("passthrough failed", e);
+                    throw new ResilientException("passthrough failed", e);
                 }
             }
 
@@ -201,7 +201,7 @@ class PolicyTest {
 
         var policy = Policy.compose(passthrough);
 
-        var exception = assertThrows(ResilienciaException.class, () -> policy.call(() -> {
+        var exception = assertThrows(ResilientException.class, () -> policy.call(() -> {
             throw new IllegalArgumentException("not a resiliencia exception");
         }));
         assertThat(exception)
@@ -227,14 +227,14 @@ class PolicyTest {
     private static Resilient<String> recordingPattern(List<String> callOrder, String name) {
         return new Resilient<>() {
             @Override
-            public String call(Operation<String> operation) throws ResilienciaException {
+            public String call(Operation<String> operation) throws ResilientException {
                 callOrder.add(name + "-before");
                 try {
                     var result = operation.execute();
                     callOrder.add(name + "-after");
                     return result;
                 } catch (Exception e) {
-                    throw new ResilienciaException(name + " failed", e);
+                    throw new ResilientException(name + " failed", e);
                 }
             }
 

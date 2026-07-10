@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.patterns.retry;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 
@@ -8,7 +8,7 @@ import java.io.Serial;
  * Thrown by the Retry pattern when all configured attempts have failed.
  * Carries the total number of attempts made; the last failure is available via {@link #getCause()}.
  */
-public final class RetryExhaustedException extends ResilienciaException {
+public final class RetryExhaustedException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

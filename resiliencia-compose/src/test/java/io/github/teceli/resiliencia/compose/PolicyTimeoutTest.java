@@ -1,8 +1,8 @@
 package io.github.teceli.resiliencia.compose;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import io.github.teceli.resiliencia.patterns.retry.Retry;
 import io.github.teceli.resiliencia.patterns.timeout.Timeout;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class PolicyTimeoutTest {
     void should_throwResilienciaTimeoutException_when_composedOperationExceedsTimeout() {
         var policy = Policy.compose(Timeout.<String>of(Duration.ofMillis(50)));
 
-        assertThrows(ResilienciaTimeoutException.class, () ->
+        assertThrows(ResilientTimeoutException.class, () ->
             policy.call(PolicyTimeoutTest::blockUntilInterrupted));
     }
 
@@ -67,11 +67,11 @@ class PolicyTimeoutTest {
         var timeout = Timeout.<String>of(Duration.ofMillis(50));
         var policy = Policy.compose(retry).and(timeout);
 
-        var exception = assertThrows(ResilienciaException.class, () -> policy.call(() -> {
+        var exception = assertThrows(ResilientException.class, () -> policy.call(() -> {
             attempts.incrementAndGet();
             return blockUntilInterrupted();
         }));
-        assertThat(exception).hasCauseInstanceOf(ResilienciaTimeoutException.class);
+        assertThat(exception).hasCauseInstanceOf(ResilientTimeoutException.class);
 
         assertThat(attempts.get()).isEqualTo(2);
     }
@@ -92,7 +92,7 @@ class PolicyTimeoutTest {
             } catch (InterruptedException e) {
                 operationInterrupted.countDown();
                 Thread.currentThread().interrupt();
-                throw new ResilienciaException("interrupted", e);
+                throw new ResilientException("interrupted", e);
             }
         });
         assertThat(operationStarted.await(5, TimeUnit.SECONDS)).isTrue();
@@ -115,7 +115,7 @@ class PolicyTimeoutTest {
             return "never";
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilienciaException("interrupted", e);
+            throw new ResilientException("interrupted", e);
         }
     }
 }

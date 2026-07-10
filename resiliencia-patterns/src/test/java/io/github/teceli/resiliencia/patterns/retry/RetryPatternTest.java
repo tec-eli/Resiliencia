@@ -2,7 +2,7 @@ package io.github.teceli.resiliencia.patterns.retry;
 
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import org.junit.jupiter.api.Test;
 
@@ -358,7 +358,7 @@ class RetryPatternTest {
         });
 
         assertThat(outcome).isInstanceOfSatisfying(Outcome.Failure.class, f ->
-                assertThat(f.cause()).isInstanceOf(ResilienciaException.class));
+                assertThat(f.cause()).isInstanceOf(ResilientException.class));
         assertThat(Thread.interrupted()).isTrue();
     }
 
