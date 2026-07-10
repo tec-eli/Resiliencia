@@ -35,6 +35,14 @@ public final class RateLimiter<T> implements Resilient<T> {
     private static final Logger log = LoggerFactory.getLogger(RateLimiter.class);
     private static final Duration MAX_MILLIS_DURATION = Duration.ofMillis(Long.MAX_VALUE);
 
+    /**
+     * Number of consecutive CAS failures in {@link #tryAcquire()} that back off with
+     * {@link Thread#onSpinWait()} before escalating to {@link Thread#yield()}. Bounds CPU burn
+     * from tight CAS retries under heavy contention, ahead of the {@code maxWait}-based blocking
+     * fallback for a full window.
+     */
+    private static final int CAS_SPIN_RETRY_THRESHOLD = 8;
+
     private final String name;
     private final int limit;
     private final Duration period;
@@ -210,6 +218,7 @@ public final class RateLimiter<T> implements Resilient<T> {
         // Clamp maxWait to prevent overflow in Instant.plus(); see Bulkhead for same pattern.
         var maxWaitClamped = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : maxWait;
         var deadline = clock.instant().plus(maxWaitClamped);
+        var casRetries = 0;
         while (true) {
             Duration untilWindowEnd;
             var now = clock.instant();
@@ -224,7 +233,14 @@ public final class RateLimiter<T> implements Resilient<T> {
                     // Success: acquired a permit
                     return AcquireOutcome.acquired(limit - newState.used);
                 }
-                // CAS failed, retry the loop
+                // CAS failed: another thread updated the window concurrently. Back off briefly
+                // instead of spinning tightly, then retry the loop.
+                casRetries++;
+                if (casRetries <= CAS_SPIN_RETRY_THRESHOLD) {
+                    Thread.onSpinWait();
+                } else {
+                    Thread.yield();
+                }
                 continue;
             }
 
