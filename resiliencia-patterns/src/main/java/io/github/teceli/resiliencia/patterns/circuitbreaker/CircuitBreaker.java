@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.Predicate;
 
 /**
@@ -396,12 +397,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     /**
-     * Reset the sliding window on close so past failures from before the outage don't linger
-     * and immediately reopen the circuit once it starts observing calls again.
+     * Transitions the circuit to Closed and resets the sliding window.
      */
     private void close(StateSlot from) {
+        window.reset();
         if (current.compareAndSet(from, new StateSlot(new CircuitState.Closed()))) {
-            window.reset();
             emit(new CircuitBreakerEvent.Closed(clock.instant(), name, from.successes.get()));
         }
     }
@@ -431,9 +431,8 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     /**
-     * Fixed-size ring buffer observing whether each of the last {@code capacity} calls was a
-     * failure and/or slow, used to compute the failure and slow-call rates. Synchronized
-     * because calls may be observed concurrently from multiple threads.
+     * Observes the last {@code capacity} call outcomes to track failure and slow-call rates.
+     * Thread-safe for concurrent recording and reading of metrics.
      */
     private static final class SlidingWindow {
         private final boolean[] failures;
@@ -441,6 +440,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         private final int capacity;
         private int writeIndex = 0;
         private int filledCount = 0;
+        private final StampedLock lock = new StampedLock();
 
         private SlidingWindow(int capacity) {
             this.capacity = capacity;
@@ -448,30 +448,66 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             this.slowCalls = new boolean[capacity];
         }
 
-        synchronized void observe(boolean isFailure, boolean isSlow) {
-            failures[writeIndex] = isFailure;
-            slowCalls[writeIndex] = isSlow;
-            writeIndex = (writeIndex + 1) % capacity;
-            if (filledCount < capacity) {
-                filledCount++;
+        void observe(boolean isFailure, boolean isSlow) {
+            long stamp = lock.writeLock();
+            try {
+                failures[writeIndex] = isFailure;
+                slowCalls[writeIndex] = isSlow;
+                writeIndex = (writeIndex + 1) % capacity;
+                if (filledCount < capacity) {
+                    filledCount++;
+                }
+            } finally {
+                lock.unlockWrite(stamp);
             }
         }
 
-        synchronized boolean isFull() {
-            return filledCount == capacity;
+        boolean isFull() {
+            long stamp = lock.readLock();
+            try {
+                return filledCount == capacity;
+            } finally {
+                lock.unlockRead(stamp);
+            }
         }
 
-        synchronized void reset() {
-            writeIndex = 0;
-            filledCount = 0;
+        void reset() {
+            long stamp = lock.writeLock();
+            try {
+                writeIndex = 0;
+                filledCount = 0;
+            } finally {
+                lock.unlockWrite(stamp);
+            }
         }
 
-        synchronized double failureRate() {
-            return rateOf(failures);
+        double failureRate() {
+            return computeRate(failures);
         }
 
-        synchronized double slowCallRate() {
-            return rateOf(slowCalls);
+        double slowCallRate() {
+            return computeRate(slowCalls);
+        }
+
+        private double computeRate(boolean[] flags) {
+            long stamp = lock.tryOptimisticRead();
+            int fc = filledCount;
+            int count = 0;
+            for (int i = 0; i < fc; i++) {
+                if (flags[i]) {
+                    count++;
+                }
+            }
+
+            if (!lock.validate(stamp)) {
+                stamp = lock.readLock();
+                try {
+                    return rateOf(flags);
+                } finally {
+                    lock.unlockRead(stamp);
+                }
+            }
+            return (fc == 0) ? 0.0 : (double) count / fc;
         }
 
         private double rateOf(boolean[] flags) {

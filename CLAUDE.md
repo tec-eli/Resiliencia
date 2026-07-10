@@ -281,6 +281,7 @@ jcstress concurrency tests. Not published. Run before releases.
 
 ### Do not
 
+- **Create git commits without explicit user request.** Only commit when the user explicitly asks. Staging changes is OK, but commits require authorization.
 - Refactor, rename, or restructure existing code unless explicitly asked
 - Add external dependencies to `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose` without explicit approval
 - Add external dependencies to other modules without approval
