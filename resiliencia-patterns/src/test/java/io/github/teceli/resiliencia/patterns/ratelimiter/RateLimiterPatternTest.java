@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -212,6 +214,47 @@ class RateLimiterPatternTest {
         var reconfigured = original.withLimit(1);
 
         assertThat(reconfigured.call(() -> "independent")).isEqualTo("independent");
+    }
+
+    @Test
+    void should_grantExactlyLimitPermits_when_manyThreadsContendConcurrently() throws InterruptedException {
+        var threadCount = 500;
+        var limit = 100;
+        var limiter = RateLimiter.<Integer>of("rate-limiter", limit, Duration.ofSeconds(30));
+        var ready = new CountDownLatch(threadCount);
+        var start = new CountDownLatch(1);
+        var done = new CountDownLatch(threadCount);
+        var granted = new AtomicInteger();
+        var rejected = new AtomicInteger();
+        var threads = new ArrayList<Thread>();
+
+        for (var i = 0; i < threadCount; i++) {
+            var thread = Thread.ofVirtual().unstarted(() -> {
+                ready.countDown();
+                try {
+                    start.await();
+                    limiter.call(() -> 1);
+                    granted.incrementAndGet();
+                } catch (RateLimiterException e) {
+                    rejected.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+            threads.add(thread);
+        }
+
+        threads.forEach(Thread::start);
+        ready.await();
+        start.countDown();
+        done.await();
+
+        assertThat(granted.get())
+                .as("exactly the configured limit should be granted, even under heavy CAS contention")
+                .isEqualTo(limit);
+        assertThat(rejected.get()).isEqualTo(threadCount - limit);
     }
 
     /**
