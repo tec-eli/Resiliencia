@@ -7,7 +7,7 @@ import java.time.Instant;
  * The state of a {@link CircuitBreaker} at a point in time. Closed, Open, and HalfOpen are the
  * only possible states, modeled as a closed hierarchy so callers can pattern-match exhaustively.
  */
-public sealed interface CircuitState permits CircuitState.Closed, CircuitState.Open, CircuitState.HalfOpen {
+public sealed interface CircuitState {
 
     /**
      * Calls pass through normally while their outcomes are recorded in the sliding window.

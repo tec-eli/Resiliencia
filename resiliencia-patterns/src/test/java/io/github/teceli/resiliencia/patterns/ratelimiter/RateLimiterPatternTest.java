@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -183,6 +184,12 @@ class RateLimiterPatternTest {
                 });
 
         assertThat(limiter.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
+    void should_throwNullPointerException_when_listenerIsNull() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> RateLimiter.<String>of("rate-limiter", 1, PERIOD).withListener(null));
     }
 
     @Test

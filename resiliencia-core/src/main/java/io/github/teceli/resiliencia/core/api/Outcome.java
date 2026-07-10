@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.core.api;
 
 import java.time.Duration;
+import java.util.Objects;
 
 /**
  * Result of executing an operation with a pattern.
@@ -8,19 +9,31 @@ import java.time.Duration;
  */
 public sealed interface Outcome<T> {
     /**
-     * Operation succeeded and returned a value.
+     * Operation succeeded and returned a value. {@code value} may be {@code null} — a successful
+     * operation that legitimately returns no result (e.g. {@code Void}) is still a Success, not
+     * a Failure.
      */
     record Success<T>(T value) implements Outcome<T> {}
 
     /**
-     * Operation failed with an exception.
+     * Operation failed with an exception. {@code cause} is always present — a Failure with no
+     * cause is not a meaningful outcome.
      */
-    record Failure<T>(Throwable cause) implements Outcome<T> {}
+    record Failure<T>(Throwable cause) implements Outcome<T> {
+        public Failure {
+            Objects.requireNonNull(cause, "cause must not be null");
+        }
+    }
 
     /**
-     * Operation did not complete within the configured timeout.
+     * Operation did not complete within the configured timeout. {@code timeout} is always
+     * present — it is the configured limit that was exceeded.
      */
-    record TimedOut<T>(Duration timeout) implements Outcome<T> {}
+    record TimedOut<T>(Duration timeout) implements Outcome<T> {
+        public TimedOut {
+            Objects.requireNonNull(timeout, "timeout must not be null");
+        }
+    }
 
     /**
      * Fold over the outcome: apply one function if Success, another if Failure.

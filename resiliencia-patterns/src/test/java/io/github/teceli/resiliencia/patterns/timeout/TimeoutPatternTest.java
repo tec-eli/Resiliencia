@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -228,6 +229,12 @@ class TimeoutPatternTest {
                 });
 
         assertThat(timeout.call(() -> "done")).isEqualTo("done");
+    }
+
+    @Test
+    void should_throwNullPointerException_when_listenerIsNull() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> Timeout.<String>of(GENEROUS_TIMEOUT).withListener(null));
     }
 
     @Test

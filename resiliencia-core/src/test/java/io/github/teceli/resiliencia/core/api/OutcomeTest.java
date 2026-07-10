@@ -5,8 +5,29 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class OutcomeTest {
+    @Test
+    void should_throwNullPointerException_when_failureCauseIsNull() {
+        assertThatNullPointerException().isThrownBy(() -> new Outcome.Failure<String>(null));
+    }
+
+    @Test
+    void should_throwNullPointerException_when_timedOutTimeoutIsNull() {
+        assertThatNullPointerException().isThrownBy(() -> new Outcome.TimedOut<String>(null));
+    }
+
+    @Test
+    void should_allowNullValue_when_successCarriesNoResult() {
+        // A Success wraps whatever the operation legitimately returned, including null
+        // (e.g. a Void-returning operation) — this is not the library returning null itself.
+        Outcome<String> outcome = new Outcome.Success<>(null);
+
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.Success.class, s ->
+                        assertThat(s.value()).isNull());
+    }
     @Test
     void should_holdValue_when_success() {
         Outcome<String> outcome = new Outcome.Success<>("value");

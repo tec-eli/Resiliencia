@@ -346,6 +346,12 @@ class RetryPatternTest {
     }
 
     @Test
+    void should_throwNullPointerException_when_listenerIsNull() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> Retry.<String>create().withListener(null));
+    }
+
+    @Test
     void should_preserveRealCauseAndInterruptFlag_when_interruptedDuringBackoff() {
         var cause = new RuntimeException("Always fails");
         var retry = Retry.<String>create()

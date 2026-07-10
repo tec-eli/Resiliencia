@@ -16,7 +16,8 @@ public sealed interface BulkheadEvent extends ResilienceEvent {
 
     record Permitted(Instant timestamp, String name, int activeCalls) implements BulkheadEvent {}
 
-    record Rejected(Instant timestamp, String name, int maxConcurrentCalls, Duration maxWait) implements BulkheadEvent {}
+    record Rejected(Instant timestamp, String name, int maxConcurrentCalls, Duration maxWait)
+            implements BulkheadEvent {}
 
     record Finished(Instant timestamp, String name, int activeCalls) implements BulkheadEvent {}
 }

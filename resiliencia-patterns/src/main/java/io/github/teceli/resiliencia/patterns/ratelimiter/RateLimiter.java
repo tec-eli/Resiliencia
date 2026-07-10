@@ -121,6 +121,7 @@ public final class RateLimiter<T> implements Resilient<T> {
      * outcome.
      */
     public RateLimiter<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new RateLimiter<>(name, limit, period, maxWait, newListeners, clock);

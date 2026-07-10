@@ -286,6 +286,12 @@ class BulkheadPatternTest {
     }
 
     @Test
+    void should_throwNullPointerException_when_listenerIsNull() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> Bulkhead.<String>of("bulkhead", 1).withListener(null));
+    }
+
+    @Test
     void should_reportBulkheadKind_when_patternKindQueried() {
         assertThat(Bulkhead.<String>of("bulkhead",1).patternKind()).isEqualTo(PatternKind.BULKHEAD);
         assertThat(Bulkhead.<String>of("bulkhead",1).patternName()).isEqualTo("bulkhead");
