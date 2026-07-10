@@ -45,10 +45,13 @@ public class OpenToHalfOpenTransitionTest {
             }
         });
 
+    /**
+     * Opens the circuit with a single failing call (window size 1), then fast-forwards the
+     * manual clock past the wait duration so both actors race on the same Open → HalfOpen
+     * transition using compare-and-swap. Only one may win, ensuring exactly one HalfOpened
+     * event is emitted regardless of actor interleaving.
+     */
     public OpenToHalfOpenTransitionTest() {
-        // Opens the circuit with a single failing call (window size 1), then fast-forwards the
-        // manual clock past the wait duration so both actors race on the same Open -> HalfOpen
-        // transition instead of being rejected outright.
         breaker.outcome(() -> {
             throw new IllegalStateException("stress-induced failure");
         });
@@ -65,6 +68,10 @@ public class OpenToHalfOpenTransitionTest {
         breaker.outcome(() -> "ok");
     }
 
+    /**
+     * Captures the final state: {@code r.r1 = halfOpenedCount} (expect 1: transition should
+     * occur exactly once via compare-and-swap, ensuring atomicity under concurrent access).
+     */
     @Arbiter
     public void arbiter(I_Result r) {
         r.r1 = halfOpenedCount.get();

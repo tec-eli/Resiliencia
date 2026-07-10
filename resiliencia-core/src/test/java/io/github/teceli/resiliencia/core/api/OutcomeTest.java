@@ -91,7 +91,7 @@ class OutcomeTest {
                 value -> "success: " + value,
                 cause -> "failure: " + cause.getClass().getSimpleName());
 
-        assertThat(result).isEqualTo("failure: ResilienciaTimeoutException");
+        assertThat(result).isEqualTo("failure: ResilientTimeoutException");
     }
 
     @Test

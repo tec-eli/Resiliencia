@@ -47,10 +47,12 @@ public class HalfOpenToClosedTransitionTest {
             }
         });
 
+    /**
+     * Opens the circuit (window size 1), fast-forwards past the wait duration, then makes
+     * one successful call single-threaded: this both flips Open → HalfOpen and consumes the
+     * first of the three permitted test calls, leaving exactly two for the actors to race on.
+     */
     public HalfOpenToClosedTransitionTest() {
-        // Opens the circuit (window size 1), fast-forwards past the wait duration, then makes
-        // one successful call single-threaded: this both flips Open -> HalfOpen and consumes the
-        // first of the three permitted test calls, leaving exactly two for the actors to race on.
         breaker.outcome(() -> {
             throw new IllegalStateException("stress-induced failure");
         });
@@ -68,6 +70,10 @@ public class HalfOpenToClosedTransitionTest {
         breaker.outcome(() -> "ok");
     }
 
+    /**
+     * Captures the final state: {@code r.r1 = closedCount} (expect 1: transition should occur
+     * exactly once via compare-and-swap, ensuring atomicity under concurrent access).
+     */
     @Arbiter
     public void arbiter(I_Result r) {
         r.r1 = closedCount.get();

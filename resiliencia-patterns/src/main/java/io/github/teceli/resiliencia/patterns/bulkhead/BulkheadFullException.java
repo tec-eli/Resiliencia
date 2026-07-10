@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.patterns.bulkhead;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 import java.time.Duration;
@@ -9,7 +9,7 @@ import java.time.Duration;
  * Thrown when a Bulkhead rejects a call because all permits are in use and no permit
  * became available within the configured maximum wait time.
  */
-public final class BulkheadFullException extends ResilienciaException {
+public final class BulkheadFullException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

@@ -3,8 +3,8 @@ package io.github.teceli.resiliencia.patterns.ratelimiter;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
@@ -159,15 +159,15 @@ public final class RateLimiter<T> implements Resilient<T> {
     }
 
     @Override
-    public T call(Operation<T> operation) throws ResilienciaException {
+    public T call(Operation<T> operation) throws ResilientException {
         return switch (outcome(operation)) {
             case Outcome.Success<T>(T value) -> value;
             // outcome() never produces TimedOut; the case exists only for exhaustiveness
             // over the sealed Outcome.
-            case Outcome.TimedOut<T>(var timeout) -> throw new ResilienciaTimeoutException(timeout);
+            case Outcome.TimedOut<T>(var timeout) -> throw new ResilientTimeoutException(timeout);
             case Outcome.Failure<T>(RuntimeException cause) -> throw cause;
             case Outcome.Failure<T>(Throwable cause) ->
-                    throw new ResilienciaException("Operation failed inside rate limiter", cause);
+                    throw new ResilientException("Operation failed inside rate limiter", cause);
         };
     }
 
@@ -179,7 +179,7 @@ public final class RateLimiter<T> implements Resilient<T> {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new Outcome.Failure<>(
-                    new ResilienciaException("Interrupted while waiting for a rate limiter permit", e));
+                    new ResilientException("Interrupted while waiting for a rate limiter permit", e));
         }
 
         if (!acquireOutcome.acquired()) {

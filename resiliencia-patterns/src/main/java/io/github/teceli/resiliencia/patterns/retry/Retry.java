@@ -3,8 +3,8 @@ package io.github.teceli.resiliencia.patterns.retry;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
-import io.github.teceli.resiliencia.core.api.ResilienciaTimeoutException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
+import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
@@ -181,13 +181,13 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
     }
 
     @Override
-    public T call(Operation<T> operation) throws ResilienciaException {
+    public T call(Operation<T> operation) throws ResilientException {
         var result = execute(operation);
         return switch (result.outcome()) {
             case Outcome.Success<T>(T value) -> value;
             // execute() never produces TimedOut (an inner Timeout pattern surfaces as a Failure
             // cause instead); the case exists only for exhaustiveness over the sealed Outcome.
-            case Outcome.TimedOut<T>(Duration timeout) -> throw new ResilienciaTimeoutException(timeout);
+            case Outcome.TimedOut<T>(Duration timeout) -> throw new ResilientTimeoutException(timeout);
             case Outcome.Failure<T>(Throwable cause) -> {
                 if (result.rejected()) {
                     throw new RetryRejectedException(result.attempts(), cause);
@@ -222,7 +222,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
                 if (attempt < maxAttempts && testShouldRetry(e) && !deadlineExceeded(startInstant)) {
                     try {
                         sleep(Math.min(applyJitter(delayMs), maxDelayMs));
-                    } catch (ResilienciaException interrupted) {
+                    } catch (ResilientException interrupted) {
                         return new ExecutionResult<>(new Outcome.Failure<>(interrupted), attempt, false);
                     }
                     delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
@@ -270,7 +270,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
             clock.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResilienciaException("Retry interrupted", e);
+            throw new ResilientException("Retry interrupted", e);
         }
     }
 

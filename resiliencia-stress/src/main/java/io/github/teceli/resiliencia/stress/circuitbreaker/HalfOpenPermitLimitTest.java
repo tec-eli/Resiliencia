@@ -45,15 +45,22 @@ public class HalfOpenPermitLimitTest {
         .withPermittedCallsInHalfOpenState(1)
         .withClock(clock);
 
+    /**
+     * Opens the circuit (window size 1) and fast-forwards past the wait duration, so the
+     * actors below race on the Open → HalfOpen transition and its single permit together.
+     */
     public HalfOpenPermitLimitTest() {
-        // Opens the circuit (window size 1) and fast-forwards past the wait duration, so the
-        // actors below race on the Open -> HalfOpen transition and its single permit together.
         breaker.outcome(() -> {
             throw new IllegalStateException("stress-induced failure");
         });
         clock.advance(WAIT_DURATION);
     }
 
+    /**
+     * Attempts a trial call in HalfOpen state, counting admissions (permitted to execute) and
+     * rejections (denied by permit exhaustion). Trial calls fail on purpose to verify that
+     * late-arriving actors cannot slip through after the HalfOpen episode ends.
+     */
     private void attemptTrialCall() {
         try {
             breaker.call(() -> {
@@ -63,7 +70,6 @@ public class HalfOpenPermitLimitTest {
             rejectedCount.incrementAndGet();
             return;
         } catch (IllegalStateException admittedFailure) {
-            // Expected: an admitted trial call always fails on purpose, see class javadoc.
         }
         admittedCount.incrementAndGet();
     }
@@ -83,6 +89,11 @@ public class HalfOpenPermitLimitTest {
         attemptTrialCall();
     }
 
+    /**
+     * Captures the final state: {@code r.r1 = admittedCount} (expect 1: only one trial call
+     * should be permitted in HalfOpen state) and {@code r.r2 = rejectedCount} (expect 2: the
+     * other two actors should be rejected with {@link CircuitBreakerOpenException}).
+     */
     @Arbiter
     public void arbiter(II_Result r) {
         r.r1 = admittedCount.get();

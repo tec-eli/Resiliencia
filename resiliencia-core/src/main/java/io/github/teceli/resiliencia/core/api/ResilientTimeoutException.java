@@ -8,14 +8,14 @@ import java.time.Duration;
  * The operation's thread has been interrupted by the time this is thrown; whether the
  * operation actually stopped depends on it responding to interruption.
  */
-public final class ResilienciaTimeoutException extends ResilienciaException {
+public final class ResilientTimeoutException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     private final Duration timeout;
 
-    public ResilienciaTimeoutException(Duration timeout) {
+    public ResilientTimeoutException(Duration timeout) {
         super("Operation timed out after " + timeout);
         this.timeout = timeout;
     }

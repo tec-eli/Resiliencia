@@ -12,7 +12,7 @@ public interface Resilient<T> {
      * Execute an operation with resilience guarantees.
      * May throw ResilienciaException or a specific pattern exception.
      */
-    T call(Operation<T> operation) throws ResilienciaException;
+    T call(Operation<T> operation) throws ResilientException;
 
     /**
      * Execute an operation and capture the result or failure as an Outcome.
@@ -80,6 +80,6 @@ public interface Resilient<T> {
 
     @FunctionalInterface
     interface Operation<T> {
-        T execute() throws ResilienciaException;
+        T execute() throws ResilientException;
     }
 }

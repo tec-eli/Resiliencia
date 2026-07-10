@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.patterns.ratelimiter;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 import java.time.Duration;
@@ -9,7 +9,7 @@ import java.time.Duration;
  * Thrown when a RateLimiter rejects a call because the current window's permits are used up
  * and no permit would become available within the configured maximum wait time.
  */
-public final class RateLimiterException extends ResilienciaException {
+public final class RateLimiterException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

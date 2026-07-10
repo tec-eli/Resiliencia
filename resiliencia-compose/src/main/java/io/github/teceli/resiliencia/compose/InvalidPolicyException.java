@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.compose;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 
@@ -8,7 +8,7 @@ import java.io.Serial;
  * Thrown when a Policy is constructed with an invalid configuration (e.g. no patterns).
  * The message describes the problem; {@link #suggestedFix()} describes how to resolve it.
  */
-public final class InvalidPolicyException extends ResilienciaException {
+public final class InvalidPolicyException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

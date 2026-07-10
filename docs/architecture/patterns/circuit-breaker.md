@@ -64,7 +64,7 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 
 | Property                        | Required | Description                                                    |
 |---------------------------------|----------|----------------------------------------------------------------|
-| `name`                          | yes      | Identifier used in events and exceptions                       |
+| `name`                          | yes      | Identifier used in events and exceptions (instance-specific)   |
 | `failureRateThreshold`          | no       | Fraction of failures that triggers open. Default: 0.5          |
 | `slowCallRateThreshold`         | no       | Fraction of slow calls that triggers open. Default: 1.0        |
 | `slowCallDurationThreshold`     | no       | What counts as a slow call. Default: no limit                  |
@@ -74,6 +74,18 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 | `recordOn`                      | no       | Exception types that count as failures. Default: any Exception |
 | `ignoreOn`                      | no       | Exception types that are not recorded                          |
 | `recordOnResult`                | no       | Predicate — record a failure based on return value             |
+| `withListener()`                | no       | Subscribe to circuit events (e.g. Opened, Closed, CallRecorded)|
+| `withClock()`                   | no       | Use custom Clock instead of system (mainly for testing)        |
+| `state()`                       | inspect  | Get current state (Closed/Open/HalfOpen) with remaining wait   |
+
+---
+
+## Key Concepts
+
+### `name` vs `patternName()`
+
+- **`name`**: Instance-specific identifier (e.g., `"payment-service-cb"`, `"auth-retry-timeout"`). Appears in events and exceptions. Set at construction and must be unique per instance.
+- **`patternName()`**: Type identifier, always `"circuit-breaker"`. Used for observability/telemetry when grouping by pattern type, independent of instance.
 
 ---
 

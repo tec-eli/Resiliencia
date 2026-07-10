@@ -1,6 +1,6 @@
 package io.github.teceli.resiliencia.patterns.retry;
 
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 
@@ -9,7 +9,7 @@ import java.io.Serial;
  * attempt budget is exhausted. Distinct from {@link RetryExhaustedException}, which means the
  * attempt budget itself ran out. The rejected failure is available via {@link #getCause()}.
  */
-public final class RetryRejectedException extends ResilienciaException {
+public final class RetryRejectedException extends ResilientException {
 
     @Serial
     private static final long serialVersionUID = 1L;

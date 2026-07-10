@@ -3,7 +3,7 @@ package io.github.teceli.resiliencia.compose;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
-import io.github.teceli.resiliencia.core.api.ResilienciaException;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.patterns.retry.Retry;
 import org.junit.jupiter.api.Test;
 
@@ -262,7 +262,7 @@ class PolicyOrderValidationTest {
     private static Resilient<String> recordingPattern(PatternKind kind, List<String> callOrder) {
         return new Resilient<>() {
             @Override
-            public String call(Operation<String> operation) throws ResilienciaException {
+            public String call(Operation<String> operation) throws ResilientException {
                 callOrder.add(kind.name());
                 return operation.execute();
             }
