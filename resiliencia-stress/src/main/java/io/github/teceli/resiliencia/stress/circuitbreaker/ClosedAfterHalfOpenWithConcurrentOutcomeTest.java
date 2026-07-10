@@ -53,10 +53,12 @@ public class ClosedAfterHalfOpenWithConcurrentOutcomeTest {
             }
         });
 
+    /**
+     * Opens the circuit, fast-forwards past the wait duration, then makes one successful
+     * call single-threaded: this transitions to HalfOpen and consumes one of the four
+     * permitted calls, leaving three for the actors to race on.
+     */
     public ClosedAfterHalfOpenWithConcurrentOutcomeTest() {
-        // Opens the circuit, fast-forwards past the wait duration, then makes one successful
-        // call single-threaded: this transitions to HalfOpen and consumes one of the four
-        // permitted calls, leaving three for the actors to race on.
         breaker.outcome(() -> {
             throw new IllegalStateException("stress-induced failure");
         });
@@ -79,6 +81,12 @@ public class ClosedAfterHalfOpenWithConcurrentOutcomeTest {
         breaker.outcome(() -> "ok");
     }
 
+    /**
+     * Captures the final state: {@code r.r1 = closedCount} (expect 1: HalfOpen→Closed
+     * transition must occur exactly once via compare-and-swap) and {@code r.r2 = recordedCount}
+     * (expect 2-3: outcomes concurrently recorded during the close transition without window
+     * corruption, verifying atomicity of the reset operation).
+     */
     @Arbiter
     public void arbiter(II_Result r) {
         r.r1 = closedCount.get();

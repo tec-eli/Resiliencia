@@ -27,23 +27,29 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Outcome(expect = Expect.FORBIDDEN, desc = "Circuit opened zero or more than once.")
 public class ClosedToOpenTransitionTest {
 
+    private static final int SLIDING_WINDOW_SIZE = 2;
+    private static final double FAILURE_RATE_THRESHOLD = 0.5;
+
     private final AtomicInteger openedCount = new AtomicInteger(0);
 
     private final CircuitBreaker<Void> breaker = CircuitBreaker.<Void>of("stress-closed-to-open")
-        .withSlidingWindowSize(2)
-        .withFailureRateThreshold(0.5)
+        .withSlidingWindowSize(SLIDING_WINDOW_SIZE)
+        .withFailureRateThreshold(FAILURE_RATE_THRESHOLD)
         .withListener(event -> {
             if (event instanceof CircuitBreakerEvent.Opened) {
                 openedCount.incrementAndGet();
             }
         });
 
+    /**
+     * Seeds the window with one failure so either actor's own failing call is enough to make
+     * the window full and past threshold, without the seed call itself racing the actors.
+     */
     public ClosedToOpenTransitionTest() {
-        // Seeds the window with one failure so either actor's own failing call is enough to make
-        // the window full and past threshold, without the seed call itself racing the actors.
         recordFailure();
     }
 
+    /** Emits a single failure to seed the sliding window for the race condition. */
     private void recordFailure() {
         breaker.outcome(() -> {
             throw new IllegalStateException("stress-induced failure");

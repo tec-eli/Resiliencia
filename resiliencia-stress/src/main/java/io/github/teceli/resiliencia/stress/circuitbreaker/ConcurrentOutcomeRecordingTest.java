@@ -42,6 +42,14 @@ public class ConcurrentOutcomeRecordingTest {
             }
         });
 
+    /**
+     * Intentionally starts with an empty window to verify outcome recording atomicity from
+     * ground state. Unlike state-transition tests that pre-position the circuit, this test
+     * captures the race condition of concurrent success/failure recording with no prior history.
+     */
+    public ConcurrentOutcomeRecordingTest() {
+    }
+
     @Actor
     public void actor1() {
         breaker.outcome(() -> "ok");
@@ -54,6 +62,11 @@ public class ConcurrentOutcomeRecordingTest {
         });
     }
 
+    /**
+     * Captures the final state: {@code r.r1 = recordedCount} (expect 2: one success, one
+     * failure recorded atomically) and {@code r.r2 = finalRateObservedCount} (expect ≥1: at
+     * least one reader observes the correct 0.5 failure rate, verifying window consistency).
+     */
     @Arbiter
     public void arbiter(II_Result r) {
         r.r1 = recordedCount.get();
