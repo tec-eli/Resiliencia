@@ -49,6 +49,30 @@ before the breaker decides to close, which is not part of the calling contract (
 circuit breaker implementations have). In practice this only matters for calls racing the exact HalfOpen-to-Closed
 transition instant — normal traffic is spread out enough in time that the boundary is never contended this way.
 
+The `HalfOpen → Open` direction races the same way, mirrored. Several admitted trial calls can be in flight at once
+(up to `permittedCallsInHalfOpenState`, or slightly more per the admission race above), and any one of them failing
+must reopen the circuit. Resolution is first-CAS-wins on the shared HalfOpen state: the first trial call whose
+outcome successfully swaps it for a new Open state is the failure that "wins" — its reason is what the `Opened`
+event reports, and its instant becomes `openedAt`. This is a race to *record* an outcome, not a race to *start* a
+call, so the winning failure is not necessarily the first trial call that was admitted.
+
+The other admitted trial calls are never aborted: the breaker has no cancellation mechanism for a call it has
+already let through, so every admitted trial call always runs to completion regardless of what the state does in
+the meantime. Each one is still recorded into the sliding window and reported via `CallRecorded` — that bookkeeping
+happens unconditionally, before the current state is even consulted. What changes is only what happens *after* the
+recording: once the shared HalfOpen state has already been swapped out by the winning failure, any other trial
+call's own attempt to act on its outcome against that same, now-stale state fails its compare-and-swap and is a
+no-op — whether that other outcome was itself a failure (no second `Opened` event, `openedAt` is not pushed later by
+a straggler) or a success (it does not spuriously count toward closing a circuit that is already Open). Exactly one
+`Opened` event is emitted per HalfOpen episode, no matter how many admitted trial calls fail.
+
+This is the same single-permit-per-trial admission model as the Closed race, mirrored rather than contradicted:
+calls that make their first admission check only after the flip to Open see Open and are rejected (or start
+waiting out `waitDurationInOpenState`), instead of being incorrectly granted a HalfOpen permit against a budget
+that has already been decided. Where the Closed side is permissive by design (post-transition calls are admitted
+unconditionally), the Open side is restrictive by design (post-transition calls are rejected outright) — both sides
+are just the current state, freshly re-checked at admission time, doing what it always does.
+
 ### Rate thresholds
 
 Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
