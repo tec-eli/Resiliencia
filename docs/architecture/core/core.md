@@ -9,7 +9,7 @@ These types are the foundation of the entire API. Every pattern depends on them.
 The base contract implemented by all patterns and by Policy. Defines three execution modes that every resilient
 operation must support:
 
-- **Blocking execution** — runs on the calling thread. Throws a ResilienciaException subtype on failure.
+- **Blocking execution** — runs on the calling thread. Throws a ResilientException subtype on failure.
 - **Async execution** — runs asynchronously. Returns a future that completes exceptionally on failure.
 - **Outcome execution** — never throws. Returns a sealed Outcome type representing success, failure, or timeout.
 
@@ -53,7 +53,7 @@ context as typed fields — not just a message string.
 | `RetryExhaustedException`     | Retry                    | attempt count, last cause            |
 | `RetryRejectedException`      | Retry                    | attempt count, last cause            |
 | `RetryInterruptedException`   | Retry                    | attempt count, last cause            |
-| `ResilienciaTimeoutException` | Timeout                  | configured limit                     |
+| `ResilientTimeoutException`   | Timeout                  | configured limit                     |
 | `CircuitBreakerOpenException` | CircuitBreaker           | name, open since, remaining wait     |
 | `BulkheadFullException`       | Bulkhead                 | name, max concurrent calls, max wait |
 | `RateLimiterException`        | RateLimiter              | name, limit, period, max wait        |
@@ -61,7 +61,7 @@ context as typed fields — not just a message string.
 
 The original operation's exception is always reachable, either as a typed field or via the standard cause chain.
 
-A `throws ResilienciaException` clause may still appear on method signatures as documentation — it costs the caller
+A `throws ResilientException` clause may still appear on method signatures as documentation — it costs the caller
 nothing, since no `catch` or further `throws` is required for an unchecked type.
 
 ---

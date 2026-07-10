@@ -70,8 +70,8 @@ RateLimiter → CircuitBreaker → Bulkhead → Retry → Timeout
 - **Bulkhead before Retry** — one permit is held for the whole retry loop, not re-acquired per attempt
 - **Retry before Timeout** — Timeout is per-attempt, so it must sit on the innermost layer to apply to each attempt
   individually. **This does not happen automatically with `Retry.create()`'s defaults**: the default `shouldRetry`
-  only matches `IOException`, and `Timeout` throws `ResilienciaTimeoutException`, which isn't one. Retrying a
-  per-attempt timeout requires extending `shouldRetry` to cover `ResilienciaTimeoutException` explicitly (see
+  only matches `IOException`, and `Timeout` throws `ResilientTimeoutException`, which isn't one. Retrying a
+  per-attempt timeout requires extending `shouldRetry` to cover `ResilientTimeoutException` explicitly (see
   `retry.md`'s "Exception classification" section) — this ordering makes that retry *possible*, it doesn't make it
   happen by itself.
 

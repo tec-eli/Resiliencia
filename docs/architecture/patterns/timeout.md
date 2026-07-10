@@ -8,7 +8,7 @@ Cancels an operation if it does not complete within a configured duration.
 
 The operation runs on a virtual thread. A timer starts when the call begins. If the operation completes before the timer
 expires, the result is returned normally. If the timer expires first, the calling thread receives a
-`ResilienciaTimeoutException` immediately.
+`ResilientTimeoutException` immediately.
 
 Cancellation is real — the virtual thread running the operation is interrupted, not polled. Operations that do not
 respond to interruption will continue running in the background but their result is discarded.
@@ -42,4 +42,4 @@ the operation holds resources that must be released cleanly.
 
 ## Failure
 
-Throws `ResilienciaTimeoutException`. Fields: configured limit.
+Throws `ResilientTimeoutException`. Fields: configured limit.

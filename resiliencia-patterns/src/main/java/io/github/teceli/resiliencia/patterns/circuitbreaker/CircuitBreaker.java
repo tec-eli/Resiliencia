@@ -408,8 +408,8 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * Transitions the circuit to Closed and resets the sliding window.
      */
     private void close(StateSlot from) {
-        window.reset();
         if (current.compareAndSet(from, new StateSlot(new CircuitState.Closed()))) {
+            window.reset();
             emit(new CircuitBreakerEvent.Closed(clock.instant(), name, from.successes.get()));
         }
     }
