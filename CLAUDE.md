@@ -110,7 +110,7 @@ never depends on Micrometer or OTel.
 **5. Unchecked exceptions only**
 
 All resiliencia exceptions extend `RuntimeException`. Users can catch specific exceptions (e.g.,
-`CircuitBreakerOpenException`), catch all with `ResilienciaException`, or use `outcome()` to avoid exceptions
+`CircuitBreakerOpenException`), catch all with `ResilientException`, or use `outcome()` to avoid exceptions
 entirely.
 
 **6. Policy order validation**
@@ -150,12 +150,12 @@ Use `Resilient<T>.patternKind()` for this kind of internal check, never `instanc
 
 ### Error handling
 
-Hierarchy: `ResilienciaException` (base) extends `RuntimeException`, with `RetryExhaustedException`,
-`RetryRejectedException`, `RetryInterruptedException`, `ResilienciaTimeoutException`, `CircuitBreakerOpenException`,
+Hierarchy: `ResilientException` (base) extends `RuntimeException`, with `RetryExhaustedException`,
+`RetryRejectedException`, `RetryInterruptedException`, `ResilientTimeoutException`, `CircuitBreakerOpenException`,
 `BulkheadFullException`, `RateLimiterException`, `InvalidPolicyException` as subtypes.
 
 - **Specific exceptions:** catch individual exceptions for fine-grained control
-- **General catch:** use `ResilienciaException` to catch all library-related failures
+- **General catch:** use `ResilientException` to catch all library-related failures
 - **No exceptions:** use `outcome()` instead of `call()` for functional/Result-oriented style — never throws
 - **Event listening:** subscribe to pattern events for observability, even if you don't catch exceptions
 - Never swallow exceptions silently; always handle explicitly, log, or rethrow
