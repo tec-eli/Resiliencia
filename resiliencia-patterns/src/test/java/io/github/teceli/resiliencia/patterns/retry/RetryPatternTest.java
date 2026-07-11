@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class RetryPatternTest {
     @Test
     void should_reportRetryKind_when_patternKindQueried() {
-        var retry = Retry.<String>create();
+        var retry = Retry.<String>create("retry-under-test");
 
         assertThat(retry.patternKind()).isEqualTo(PatternKind.RETRY);
     }
@@ -31,7 +31,7 @@ class RetryPatternTest {
     void should_succeedAfterRetry_when_operationFailsInitially() {
         var counter = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -52,7 +52,7 @@ class RetryPatternTest {
     void should_exhaustRetries_when_allAttemptsFail() {
         var counter = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -73,7 +73,7 @@ class RetryPatternTest {
         var counter = new AtomicInteger(0);
 
         // Default shouldRetry only matches IOException, so a RuntimeException is rejected outright.
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10);
 
@@ -92,7 +92,7 @@ class RetryPatternTest {
     void should_emitRejectedEvent_when_shouldRetryDeclines() {
         var events = new ArrayList<RetryEvent>();
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withListener(event -> {
@@ -112,7 +112,7 @@ class RetryPatternTest {
 
     @Test
     void should_returnRealFailure_when_shouldRetryThrows() {
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> {
@@ -132,7 +132,7 @@ class RetryPatternTest {
         var clock = new RecordingClock();
         var events = new ArrayList<RetryEvent>();
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(5)
                 .withInitialDelay(100)
                 .withOverallDeadline(150)
@@ -156,8 +156,8 @@ class RetryPatternTest {
 
     @Test
     void should_reportHasOwnDeadline_when_overallDeadlineConfigured() {
-        var withDeadline = Retry.<String>create().withOverallDeadline(1_000);
-        var withoutDeadline = Retry.<String>create();
+        var withDeadline = Retry.<String>create("retry-under-test").withOverallDeadline(1_000);
+        var withoutDeadline = Retry.<String>create("retry-under-test");
 
         assertThat(withDeadline.hasOwnDeadline()).isTrue();
         assertThat(withoutDeadline.hasOwnDeadline()).isFalse();
@@ -168,7 +168,7 @@ class RetryPatternTest {
         var counter = new AtomicInteger(0);
         var events = new ArrayList<RetryEvent>();
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withListener(event -> {
@@ -195,7 +195,7 @@ class RetryPatternTest {
     void should_returnOutcome_when_usingOutcomeMethod() {
         var counter = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -215,7 +215,7 @@ class RetryPatternTest {
 
     @Test
     void should_returnFailureWithOriginalCause_when_usingOutcomeMethod() {
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(2)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -235,7 +235,7 @@ class RetryPatternTest {
         // Asserts relative growth instead of absolute delays to avoid CI timing flakiness.
         var attemptTimestamps = new ArrayList<Long>();
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(4)
                 .withInitialDelay(10)
                 .withBackoffMultiplier(2.0)
@@ -266,7 +266,7 @@ class RetryPatternTest {
     @Test
     void should_capBackoffDelays_when_maxDelayConfigured() {
         var clock = new RecordingClock();
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(4)
                 .withInitialDelay(100)
                 .withBackoffMultiplier(10.0)
@@ -284,7 +284,7 @@ class RetryPatternTest {
     @Test
     void should_randomizeDelayWithinBounds_when_jitterConfigured() {
         var clock = new RecordingClock();
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(2)
                 .withInitialDelay(1_000)
                 .withJitter(0.5)
@@ -302,7 +302,7 @@ class RetryPatternTest {
     @Test
     void should_neverExceedMaxDelay_when_jitterAndMaxDelayCombined() {
         var clock = new RecordingClock();
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(5)
                 .withInitialDelay(100)
                 .withJitter(1.0)
@@ -322,22 +322,22 @@ class RetryPatternTest {
     void should_rejectInvalidJitterAndMaxDelay_when_configured() {
         assertThatIllegalArgumentException()
             .isThrownBy(() ->
-                Retry.<String>create().withJitter(-0.1));
+                Retry.<String>create("retry-under-test").withJitter(-0.1));
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withJitter(1.1));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withJitter(1.1));
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withMaxDelay(-1));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withMaxDelay(-1));
     }
 
     @Test
     void should_rejectNegativeOverallDeadline_when_configured() {
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withOverallDeadline(-1));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withOverallDeadline(-1));
     }
 
     @Test
     void should_returnOperationResult_when_listenerThrowsException() {
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withListener(event -> {
                     throw new IllegalStateException("listener boom");
                 });
@@ -348,7 +348,7 @@ class RetryPatternTest {
     @Test
     void should_neverRetry_when_maxAttemptsIsOne_evenForARetryableException() {
         var counter = new AtomicInteger(0);
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(1)
                 .withShouldRetry(e -> true);
 
@@ -366,7 +366,7 @@ class RetryPatternTest {
     @Test
     void should_stopAtWhicheverComesFirst_when_overallDeadlineJitterAndMaxDelayAllConfigured() {
         var clock = new RecordingClock();
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(10)
                 .withInitialDelay(100)
                 .withBackoffMultiplier(2.0)
@@ -389,13 +389,13 @@ class RetryPatternTest {
     @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
-            .isThrownBy(() -> Retry.<String>create().withListener(null));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withListener(null));
     }
 
     @Test
     void should_preserveRealCauseAndInterruptFlag_when_interruptedDuringBackoff() {
         var cause = new RuntimeException("Always fails");
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true)
@@ -414,7 +414,7 @@ class RetryPatternTest {
     void should_throwRetryInterruptedException_when_interruptedDuringBackoff() {
         var cause = new RuntimeException("Always fails");
         var events = new ArrayList<RetryEvent>();
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true)
@@ -442,7 +442,7 @@ class RetryPatternTest {
 
         // shouldRetry is evaluated before the attempt-count check, per its documented contract:
         // a non-retryable exception on the last attempt is still Rejected, not Exhausted.
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(1)
                 .withInitialDelay(10);
 
@@ -460,19 +460,25 @@ class RetryPatternTest {
     @Test
     void should_rejectInvalidMaxAttemptsInitialDelayAndBackoffMultiplier_when_configured() {
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withMaxAttempts(0));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withMaxAttempts(0));
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withInitialDelay(-1));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withInitialDelay(-1));
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Retry.<String>create().withBackoffMultiplier(0.9));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withBackoffMultiplier(0.9));
     }
 
     @Test
     void should_rejectNullShouldRetryAndClock_when_configured() {
         assertThatNullPointerException()
-            .isThrownBy(() -> Retry.<String>create().withShouldRetry(null));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withShouldRetry(null));
         assertThatNullPointerException()
-            .isThrownBy(() -> Retry.<String>create().withClock(null));
+            .isThrownBy(() -> Retry.<String>create("retry-under-test").withClock(null));
+    }
+
+    @Test
+    void should_rejectNullName_when_created() {
+        assertThatNullPointerException()
+            .isThrownBy(() -> Retry.<String>create(null));
     }
 
     /**

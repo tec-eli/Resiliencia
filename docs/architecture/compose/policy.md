@@ -41,6 +41,24 @@ All rejected pairs are checked **transitively**: when `and(pattern)` is called, 
 pattern's kind against *all* patterns already in the chain, not just the immediately preceding one — other patterns
 can legitimately sit between the two that actually conflict in the full optimum order below.
 
+### Observing WARN-severity warnings
+
+`Policy` accepts listeners the same way every pattern does — `Policy<T> withListener(ResilienceEvent.Listener)`,
+propagated through `.and(...)` alongside `patterns`. Whenever a WARN-severity `OrderingRule` fires (and isn't
+suppressed), a `PolicyValidationWarning` is emitted to the currently-registered listeners, **in addition to**, not
+instead of, the existing SLF4J `WARN` log — the log is unaffected by whether any listener is attached.
+
+`InvalidPolicyException` (ERROR-severity rules) can never produce this event: construction fails before a `Policy`
+instance exists to attach a listener to, so there is nothing to emit to. This isn't a gap — it's the direct
+consequence of ERROR-severity rules rejecting construction outright instead of producing an instance.
+
+A listener only observes warnings raised by `.and()` calls made *after* it was attached. `useOptimumOrder(...)`
+builds its entire chain in one static call with no opportunity to attach a listener mid-build, so any warning it
+triggers internally is never observed as an event — only via the SLF4J log, which still always fires. This is the
+same category of best-effort observability already accepted for `Timeout`'s `AbandonedWorkerSucceeded`/
+`AbandonedWorkerFailed` events. See `docs/architecture/metrics/metrics.md`'s "Policy validation warnings" section
+for the full rationale and the consuming side (`ResilienceMetricsListener`).
+
 Pattern identity for this check comes from `Resilient<T>.patternKind()` (see `core.md`) — a closed `PatternKind`
 enum, not `instanceof` (fragile against future decorators/wrappers) and not the observability-facing
 `patternName(): String` (typo-prone, no compiler safety).
@@ -102,8 +120,17 @@ only adding a suppression condition to one existing `WARN` rule. The field itsel
 | Property | Required | Description                               |
 |----------|----------|-------------------------------------------|
 | patterns | yes      | Ordered list of patterns, outermost first |
+| listeners | no      | `ResilienceEvent.Listener` instances notified of `PolicyValidationWarning`, set via `withListener(...)` |
 
 A Policy with a single pattern is valid. A Policy with zero patterns is a construction error.
+
+---
+
+## Events
+
+- **PolicyValidationWarning** — a WARN-severity `OrderingRule` fired during `.and(...)` and construction proceeded.
+  Carries: timestamp, the outer and inner `PatternKind` that triggered the rule, problem description, suggested fix.
+  See "Observing WARN-severity warnings" above for when this is (and isn't) emitted.
 
 ---
 

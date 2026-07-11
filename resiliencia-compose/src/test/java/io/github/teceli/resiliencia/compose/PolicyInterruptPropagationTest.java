@@ -62,7 +62,7 @@ class PolicyInterruptPropagationTest {
         var abandonedWorkerFailed = new CountDownLatch(1);
         var abandonedCause = new AtomicReference<Throwable>();
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(2_000)
                 .withShouldRetry(e -> true)
@@ -71,7 +71,7 @@ class PolicyInterruptPropagationTest {
                         retryInterrupted.countDown();
                     }
                 });
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                 .withListener(event -> {
                     if (event instanceof TimeoutEvent.AbandonedWorkerFailed abandoned) {
                         abandonedCause.set(abandoned.cause());
@@ -131,7 +131,7 @@ class PolicyInterruptPropagationTest {
         try {
             assertThat(awaitLatch(permitHeld)).as("holder must acquire the sole permit first").isTrue();
 
-            var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+            var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                     .withListener(event -> {
                         if (event instanceof TimeoutEvent.AbandonedWorkerFailed abandoned) {
                             abandonedCause.set(abandoned.cause());
@@ -186,7 +186,7 @@ class PolicyInterruptPropagationTest {
         // below find none left and must wait for the next window to open.
         rateLimiter.call(() -> "priming call");
 
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                 .withListener(event -> {
                     if (event instanceof TimeoutEvent.AbandonedWorkerFailed abandoned) {
                         abandonedCause.set(abandoned.cause());

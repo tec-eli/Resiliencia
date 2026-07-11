@@ -31,13 +31,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * Immutable and reusable: each {@code withX} method returns a new, independently usable
  * {@code Timeout} instance rather than mutating this one.
  */
-public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<ResilienceEvent.Listener> listeners,
-                          Clock clock) implements Resilient<T> {
+public record Timeout<T>(String name, Duration timeout, boolean cancelOnTimeout,
+                          List<ResilienceEvent.Listener> listeners, Clock clock) implements Resilient<T> {
 
     private static final Logger log = LoggerFactory.getLogger(Timeout.class);
     private static final boolean DEFAULT_CANCEL_ON_TIMEOUT = true;
 
     public Timeout {
+        Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(timeout, "timeout must not be null");
         if (timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must be positive");
@@ -50,16 +51,19 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
      * A {@code Timeout} with the given deadline, ready to use as-is or refine further
      * via {@code withX} methods. There is no default duration: a timeout is always an
      * explicit business decision.
+     *
+     * @param name identifier used in every {@link TimeoutEvent} emitted by this instance. Not
+     *             enforced unique across instances — there is no global registry to check against.
      */
-    public static <T> Timeout<T> of(Duration timeout) {
-        return new Timeout<>(timeout, DEFAULT_CANCEL_ON_TIMEOUT, List.of(), Clock.systemClock());
+    public static <T> Timeout<T> of(String name, Duration timeout) {
+        return new Timeout<>(name, timeout, DEFAULT_CANCEL_ON_TIMEOUT, List.of(), Clock.systemClock());
     }
 
     /**
      * How long the caller waits before the operation is considered timed out. Must be positive.
      */
     public Timeout<T> withTimeout(Duration timeout) {
-        return new Timeout<>(timeout, cancelOnTimeout, listeners, clock);
+        return new Timeout<>(name, timeout, cancelOnTimeout, listeners, clock);
     }
 
     /**
@@ -69,7 +73,7 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
      * holds resources that must be released cleanly rather than abandoned mid-interruption.
      */
     public Timeout<T> withCancelOnTimeout(boolean cancelOnTimeout) {
-        return new Timeout<>(timeout, cancelOnTimeout, listeners, clock);
+        return new Timeout<>(name, timeout, cancelOnTimeout, listeners, clock);
     }
 
     /**
@@ -80,14 +84,14 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
         Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
-        return new Timeout<>(timeout, cancelOnTimeout, newListeners, clock);
+        return new Timeout<>(name, timeout, cancelOnTimeout, newListeners, clock);
     }
 
     /**
      * Use a custom {@link Clock} instead of the system clock for event timestamps.
      */
     public Timeout<T> withClock(Clock clock) {
-        return new Timeout<>(timeout, cancelOnTimeout, listeners, clock);
+        return new Timeout<>(name, timeout, cancelOnTimeout, listeners, clock);
     }
 
     @Override
@@ -147,21 +151,21 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
             if (cancelOnTimeout) {
                 worker.interrupt();
             }
-            emit(new TimeoutEvent.TimedOut(clock.instant(), timeout));
+            emit(new TimeoutEvent.TimedOut(clock.instant(), name, timeout));
             return new Outcome.TimedOut<>(timeout);
         }
 
         var caughtError = error.get();
         if (caughtError != null) {
-            emit(new TimeoutEvent.Failed(clock.instant(), caughtError));
+            emit(new TimeoutEvent.Failed(clock.instant(), name, caughtError));
             throw caughtError;
         }
 
         var outcome = result.get();
         switch (outcome) {
             case Outcome.Success<T> success ->
-                    emit(new TimeoutEvent.Succeeded(clock.instant(), Duration.between(start, clock.instant())));
-            case Outcome.Failure<T> failure -> emit(new TimeoutEvent.Failed(clock.instant(), failure.cause()));
+                    emit(new TimeoutEvent.Succeeded(clock.instant(), name, Duration.between(start, clock.instant())));
+            case Outcome.Failure<T> failure -> emit(new TimeoutEvent.Failed(clock.instant(), name, failure.cause()));
             case Outcome.TimedOut<T> ignored -> { /* never produced by the worker */ }
         }
         return outcome;
@@ -174,14 +178,14 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
      */
     private void emitAbandonedSuccess(boolean timedOut) {
         if (timedOut) {
-            emit(new TimeoutEvent.AbandonedWorkerSucceeded(clock.instant()));
+            emit(new TimeoutEvent.AbandonedWorkerSucceeded(clock.instant(), name));
         }
     }
 
     /** Same as {@link #emitAbandonedSuccess}, for a worker that threw instead. */
     private void emitAbandonedFailure(boolean timedOut, Throwable cause) {
         if (timedOut) {
-            emit(new TimeoutEvent.AbandonedWorkerFailed(clock.instant(), cause));
+            emit(new TimeoutEvent.AbandonedWorkerFailed(clock.instant(), name, cause));
         }
     }
 

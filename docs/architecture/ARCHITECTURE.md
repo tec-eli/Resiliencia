@@ -28,7 +28,7 @@ for VT — documented as a risk in the README for users integrating resiliencia 
 
 ## Fluent API with reusable, immutable objects
 
-Configuration is fluent (`Retry.<T>create().withMaxAttempts(3)...`), but the resulting object is immutable and
+Configuration is fluent (`Retry.<T>create(name).withMaxAttempts(3)...`), but the resulting object is immutable and
 reusable — not a disposable builder. Each `withX` method returns a new instance (the "wither" convention, same as
 `LocalDate.withYear(...)`), never mutates the receiver. Pattern objects are thread-safe by design and compatible with
 dependency injection.
@@ -169,3 +169,24 @@ Concretely, across `resiliencia-patterns`:
 **Rejected alternatives:** wrapping `Error` into `Outcome.Failure` like any other `Throwable` (makes `outcome()`
 falsely "never throw" for conditions the JVM itself is signaling as unrecoverable, and invites callers to retry or
 filter on `Error` types the same way as ordinary exceptions).
+
+---
+
+## Logging: SLF4J, despite the no-external-dependency principle
+
+`resiliencia-patterns` and `resiliencia-compose` take a compile-scope dependency on `slf4j-api`, a deliberate
+exception to the "zero external dependencies" rule stated for those modules (`resiliencia-core` still has zero
+dependencies of any kind — it never logs). SLF4J is a facade, not a logging implementation: it adds no transitive
+runtime dependency and no consumer is forced onto a specific backend (Logback, Log4j2, JUL, or nothing at all).
+
+This supersedes an earlier, informally-assumed direction toward `java.lang.System.Logger` (JEP 264) — the built-in
+JDK logging facade, which would have kept the zero-dependency principle fully intact. SLF4J was chosen instead
+because it's the de facto standard in the Java ecosystem this library's consumers already live in (Spring, Quarkus,
+Micronaut all default to it), and a bespoke or JDK-only logging shim isn't worth the friction of consumers having to
+bridge `System.Logger` output into whatever logging stack their application already runs. The trade-off — one
+compile-scope dependency in otherwise dependency-free modules — was judged smaller than that integration cost.
+
+**Rejected alternatives:** `java.lang.System.Logger` (zero-dependency, but poor ecosystem fit — most consumers would
+need to bridge it into SLF4J/Logback anyway, just from the other direction); no logging at all in `patterns`/
+`compose` (unacceptable — `Policy`'s ordering `WARN`s, in particular, have no other delivery mechanism until a
+listener is attached, see `compose/policy.md`).

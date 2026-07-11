@@ -17,14 +17,18 @@ a permit, the call is rejected. If `maxWait` is zero, calls are rejected immedia
 
 ## Configuration surface
 
-| Property             | Required | Description                                                      |
-|----------------------|----------|------------------------------------------------------------------|
-| `maxConcurrentCalls` | yes      | Maximum number of concurrent executions                          |
-| `maxWait`            | no       | How long to wait for a permit before rejecting. Default: no wait |
+| Property             | Required | Description                                                                                                                            |
+|----------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`               | yes      | Identifier used in events and exceptions (instance-specific). First positional argument of `of(name, maxConcurrentCalls)`, no wither   |
+| `maxConcurrentCalls` | yes      | Maximum number of concurrent executions                                                                                                |
+| `maxWait`            | no       | How long to wait for a permit before rejecting. Default: no wait                                                                       |
 
 ---
 
 ## Events
+
+Every `BulkheadEvent` carries `name` (the identifier passed to `of(name, maxConcurrentCalls)`), in addition to the
+fields below.
 
 - **Permitted** — a permit was acquired, call will proceed. Carries: current active call count.
 - **Rejected** — no permit available within wait duration. Carries: max concurrent calls limit, configured max wait.

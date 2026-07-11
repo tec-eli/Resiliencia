@@ -14,15 +14,15 @@ public sealed interface TimeoutEvent extends ResilienceEvent {
         return "timeout";
     }
 
-    record Succeeded(Instant timestamp, Duration elapsed) implements TimeoutEvent {}
+    record Succeeded(Instant timestamp, String name, Duration elapsed) implements TimeoutEvent {}
 
-    record Failed(Instant timestamp, Throwable error) implements TimeoutEvent {}
+    record Failed(Instant timestamp, String name, Throwable error) implements TimeoutEvent {}
 
-    record TimedOut(Instant timestamp, Duration timeout) implements TimeoutEvent {}
+    record TimedOut(Instant timestamp, String name, Duration timeout) implements TimeoutEvent {}
 
     /** The abandoned worker (interrupted or left running past the timeout) eventually succeeded. */
-    record AbandonedWorkerSucceeded(Instant timestamp) implements TimeoutEvent {}
+    record AbandonedWorkerSucceeded(Instant timestamp, String name) implements TimeoutEvent {}
 
     /** The abandoned worker (interrupted or left running past the timeout) eventually failed. */
-    record AbandonedWorkerFailed(Instant timestamp, Throwable cause) implements TimeoutEvent {}
+    record AbandonedWorkerFailed(Instant timestamp, String name, Throwable cause) implements TimeoutEvent {}
 }

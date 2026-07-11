@@ -23,7 +23,7 @@ class PolicyTimeoutTest {
 
     @Test
     void should_throwResilienciaTimeoutException_when_composedOperationExceedsTimeout() {
-        var policy = Policy.compose(Timeout.<String>of(Duration.ofMillis(50)));
+        var policy = Policy.compose(Timeout.<String>of("timeout-under-test", Duration.ofMillis(50)));
 
         assertThrows(ResilientTimeoutException.class, () ->
             policy.call(PolicyTimeoutTest::blockUntilInterrupted));
@@ -31,7 +31,7 @@ class PolicyTimeoutTest {
 
     @Test
     void should_returnTimedOutOutcome_when_composedOperationExceedsTimeout() {
-        var policy = Policy.compose(Timeout.<String>of(Duration.ofMillis(50)));
+        var policy = Policy.compose(Timeout.<String>of("timeout-under-test", Duration.ofMillis(50)));
 
         var outcome = policy.outcome(PolicyTimeoutTest::blockUntilInterrupted);
 
@@ -44,8 +44,8 @@ class PolicyTimeoutTest {
     void should_retryAfterPerAttemptTimeout_when_retryWrapsTimeout() {
         var attempts = new AtomicInteger(0);
 
-        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
-        var timeout = Timeout.<String>of(Duration.ofMillis(100));
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
+        var timeout = Timeout.<String>of("timeout-under-test", Duration.ofMillis(100));
         var policy = Policy.compose(retry).and(timeout);
 
         var result = policy.call(() -> {
@@ -63,8 +63,8 @@ class PolicyTimeoutTest {
     void should_exhaustRetries_when_everyAttemptTimesOut() {
         var attempts = new AtomicInteger(0);
 
-        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10).withShouldRetry(e -> true);
-        var timeout = Timeout.<String>of(Duration.ofMillis(50));
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10).withShouldRetry(e -> true);
+        var timeout = Timeout.<String>of("timeout-under-test", Duration.ofMillis(50));
         var policy = Policy.compose(retry).and(timeout);
 
         var exception = assertThrows(ResilientException.class, () -> policy.call(() -> {
@@ -80,8 +80,8 @@ class PolicyTimeoutTest {
     void should_interruptOperationThroughChain_when_asyncCallCancelled() throws Exception {
         var operationStarted = new CountDownLatch(1);
         var operationInterrupted = new CountDownLatch(1);
-        var retry = Retry.<String>create().withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
-        var timeout = Timeout.<String>of(Duration.ofSeconds(30));
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(3).withInitialDelay(10).withShouldRetry(e -> true);
+        var timeout = Timeout.<String>of("timeout-under-test", Duration.ofSeconds(30));
         var policy = Policy.compose(retry).and(timeout);
 
         var future = policy.callAsync(() -> {

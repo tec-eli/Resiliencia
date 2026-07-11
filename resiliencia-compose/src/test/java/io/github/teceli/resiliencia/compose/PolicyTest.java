@@ -24,7 +24,7 @@ class PolicyTest {
     void should_composeRetryPattern_and_executeSuccessfully() {
         var counter = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -45,7 +45,7 @@ class PolicyTest {
 
     @Test
     void should_throwException_when_policyFails() {
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(2)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -61,7 +61,7 @@ class PolicyTest {
     void should_returnOutcome_when_usingOutcomeMethod() {
         var counter = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -85,7 +85,7 @@ class PolicyTest {
     void should_chainMultiplePatterns_and_executeInOrder() {
         var callCount = new AtomicInteger(0);
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(2)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -107,7 +107,7 @@ class PolicyTest {
     void should_handleComplexRetryScenario_withEventListener() {
         var events = new ArrayList<String>();
 
-        var retry = Retry.<Integer>create()
+        var retry = Retry.<Integer>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(10)
                 .withListener(event -> {
@@ -164,7 +164,7 @@ class PolicyTest {
 
     @Test
     void should_throwOriginalExceptionType_when_composedPatternFails() {
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(2)
                 .withInitialDelay(10)
                 .withShouldRetry(e -> true);
@@ -214,7 +214,7 @@ class PolicyTest {
 
     @Test
     void should_throwNullPointerException_when_addingNullPattern() {
-        var retry = Retry.<String>create().withMaxAttempts(1);
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(1);
         var policy = Policy.compose(retry);
 
         assertThrows(NullPointerException.class, () ->
@@ -254,7 +254,7 @@ class PolicyTest {
 
     @Test
     void should_reportOwnDeadline_when_composedPatternHasOverallDeadline() {
-        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+        var retryWithDeadline = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10)
                 .withOverallDeadline(5_000);
 
         var policy = Policy.compose(retryWithDeadline);
@@ -264,7 +264,7 @@ class PolicyTest {
 
     @Test
     void should_reportNoOwnDeadline_when_noComposedPatternHasOne() {
-        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10);
 
         var policy = Policy.compose(retry);
 
@@ -273,7 +273,7 @@ class PolicyTest {
 
     @Test
     void should_reportOwnDeadline_when_deadlineIsOnlyInsideNestedPolicy() {
-        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+        var retryWithDeadline = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10)
                 .withOverallDeadline(5_000);
         var nestedPolicy = Policy.compose(retryWithDeadline);
 

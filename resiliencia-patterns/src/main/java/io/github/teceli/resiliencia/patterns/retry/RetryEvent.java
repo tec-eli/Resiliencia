@@ -13,13 +13,13 @@ public sealed interface RetryEvent extends ResilienceEvent {
         return "retry";
     }
 
-    record AttemptFailed(Instant timestamp, int attemptNumber, Throwable error) implements RetryEvent {}
+    record AttemptFailed(Instant timestamp, String name, int attemptNumber, Throwable error) implements RetryEvent {}
 
-    record Success(Instant timestamp, int totalAttempts) implements RetryEvent {}
+    record Success(Instant timestamp, String name, int totalAttempts) implements RetryEvent {}
 
-    record Exhausted(Instant timestamp, int totalAttempts, Throwable lastError) implements RetryEvent {}
+    record Exhausted(Instant timestamp, String name, int totalAttempts, Throwable lastError) implements RetryEvent {}
 
-    record Rejected(Instant timestamp, int attemptNumber, Throwable error) implements RetryEvent {}
+    record Rejected(Instant timestamp, String name, int attemptNumber, Throwable error) implements RetryEvent {}
 
-    record Interrupted(Instant timestamp, int attemptNumber, Throwable lastError) implements RetryEvent {}
+    record Interrupted(Instant timestamp, String name, int attemptNumber, Throwable lastError) implements RetryEvent {}
 }

@@ -58,7 +58,7 @@ class PolicyOrderValidationTest {
 
     @Test
     void should_throwInvalidPolicyException_when_realRetryWrapsCircuitBreaker() {
-        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
+        var retry = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10);
         var circuitBreaker = fakePattern(PatternKind.CIRCUIT_BREAKER);
 
 
@@ -88,7 +88,7 @@ class PolicyOrderValidationTest {
     @Test
     void should_suppressTimeoutWrapsRetryWarn_when_retryHasOverallDeadline() {
         var timeout = fakePattern(PatternKind.TIMEOUT);
-        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+        var retryWithDeadline = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10)
                 .withOverallDeadline(5_000);
 
         var stderr = captureStdErr(() ->
@@ -282,7 +282,7 @@ class PolicyOrderValidationTest {
         // The Retry with its own deadline sits inside a nested Policy rather than being added
         // directly — hasOwnDeadline() must flatten through the nesting for suppression to still work.
         var timeout = fakePattern(PatternKind.TIMEOUT);
-        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+        var retryWithDeadline = Retry.<String>create("retry-under-test").withMaxAttempts(2).withInitialDelay(10)
                 .withOverallDeadline(5_000);
         var nestedRetryPolicy = Policy.compose(retryWithDeadline);
 
