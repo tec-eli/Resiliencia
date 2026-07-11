@@ -588,9 +588,10 @@ concrete `MeterRegistry` the app supplies (`SimpleMeterRegistry`, `PrometheusMet
 **Consequence:** a blanket guarantee that "`ResilienceMetrics` implementations must not pin
 virtual threads" is not achievable end-to-end for OTel- or Micrometer-backed consumers, because
 pinning can originate inside a concrete backend implementation resiliencia does not control. For
-example, the OpenTelemetry Java SDK's default aggregator base class (`SynchronizedAggregatorHandle`)
-synchronizes on every recorded measurement, by design — if an application wires in a
-`MeterProvider` backed by that default, pinning risk exists regardless of resiliencia's own code.
+example, the OpenTelemetry Java SDK's `Histogram` aggregation implementations synchronize on every
+recorded measurement, by design (see "Verified findings" below for the exact class) — if an
+application wires in a `MeterProvider` backed by the SDK's default aggregation, pinning risk exists
+regardless of resiliencia's own code.
 
 **Decision — scope the contract precisely, don't weaken it globally.** "Must not pin virtual
 threads" applies strictly to code resiliencia itself writes (see "Implementation contract" above).
@@ -599,17 +600,78 @@ backend — documented as a known, non-eliminable limitation, not silently assum
 
 **What IS fully within resiliencia's control, from the same audit:** `resiliencia-micrometer` must
 **not** enable `.publishPercentileHistogram()` or `.serviceLevelObjectives(...)` by default on any
-`Timer` it creates. `TimeWindowPercentileHistogram`, which backs those Micrometer features, has
-historically used `synchronized` for bucket rotation — a real, *avoidable* pinning risk, since
-resiliencia's own code decides whether to opt a `Timer` into those features, unlike the structural
-backend-choice issue above.
+`Timer` it creates. The histogram machinery backing those Micrometer features uses `synchronized`
+internally (see "Verified findings" below) — a real, *avoidable* pinning risk, since resiliencia's
+own code decides whether to opt a `Timer` into those features, unlike the structural backend-choice
+issue above. **Note the asymmetry with OTel:** for Micrometer this is avoidable because
+`publishPercentileHistogram()`/`serviceLevelObjectives()` are opt-in calls resiliencia's own
+`Timer`-creation code simply never makes. For OTel, `resiliencia-opentelemetry` records durations
+via `DoubleHistogram.record(...)` (see the mapping table above — `resilience.timeout.duration`,
+`resilience.circuitbreaker.calls`), and the OTel SDK's **default** aggregation for any `Histogram`
+instrument is the explicit-bucket histogram, which synchronizes on every record (see below). Unlike
+the Micrometer case, resiliencia's own code has no equivalent "don't opt in" lever here — the
+aggregation strategy is chosen by the consuming application via SDK `View` configuration, not by
+anything the `Histogram.record()` API surface exposes to the caller. This is a second, narrower
+instance of the same structural finding above, not a new, independently-avoidable risk.
 
-**Not yet verified:** whether the plain `Counter`/base `CumulativeTimer` implementations in the
-pinned skeleton versions (`micrometer-core:1.17.0`, `opentelemetry-api:1.63.0`) are lock-free
-(`LongAdder`/`DoubleAdder`-based, as expected) is flagged with non-verified confidence and needs a
-direct source check before being written into this document as a hard, version-specific claim. The
-structural finding and the percentile-histogram guidance above are sealed independently of that
-outstanding verification.
+**Verified findings** (direct source read against the pinned versions, GitHub tags
+`v1.17.0` of `micrometer-metrics/micrometer` and `v1.63.0` of `open-telemetry/opentelemetry-java`,
+July 2026):
+
+*Micrometer 1.17.0 (`micrometer-core`):*
+
+- `io.micrometer.core.instrument.cumulative.CumulativeCounter` — the plain `Counter` implementation
+  backing `increment()` for cumulative-mode registries (e.g. `SimpleMeterRegistry`,
+  `PrometheusMeterRegistry`) — holds a single `private final DoubleAdder value` field;
+  `increment(double)` is `value.add(amount)`. No `synchronized`, no explicit locking. Confirmed
+  lock-free as expected.
+- `io.micrometer.core.instrument.cumulative.CumulativeTimer` — backs `Timer.record(...)` for the
+  same registries — holds `LongAdder count`, `LongAdder total`, and a `TimeWindowMax max`. The
+  record path adds to the two `LongAdder`s; no `synchronized` anywhere in the class. Confirmed
+  lock-free as expected.
+- `io.micrometer.core.instrument.distribution.AbstractTimeWindowHistogram` (the shared parent class
+  actually backing `TimeWindowPercentileHistogram`, used when `.publishPercentileHistogram()` or
+  `.serviceLevelObjectives(...)` is enabled on a `Timer`) genuinely contains two `synchronized (this)`
+  blocks: one inside `rotate()` (bucket-ring rotation) and one inside `takeSnapshot()`
+  (percentile/bucket-count snapshot assembly, invoked on scrape). This confirms the existing
+  mitigation guidance. One nuance worth recording precisely: `rotate()` is called on *every*
+  `recordLong`/`recordDouble`, but it first does a cheap non-synchronized timestamp check and
+  returns immediately unless the configured rotation interval has actually elapsed, then guards
+  entry into the synchronized section with a `compareAndSet` on an `AtomicIntegerFieldUpdater`. So
+  the pinning window is periodic (once per rotation interval, e.g. once per ring-buffer bucket
+  width), not incurred on every single recorded value — still a genuine, avoidable risk once
+  percentile/SLO histograms are enabled, just less frequent in practice than "every call."
+
+*OpenTelemetry 1.63.0 (`opentelemetry-sdk-metrics`, the module an application wires in behind the
+`opentelemetry-api` interfaces `resiliencia-opentelemetry` depends on):*
+
+- The shared base class across all aggregations is
+  `io.opentelemetry.sdk.metrics.internal.aggregator.AggregatorHandle`, and it contains **zero**
+  `synchronized` code itself; `recordLong`/`recordDouble` delegate to an abstract
+  `doRecordLong`/`doRecordDouble` implemented per concrete aggregation.
+- **Counter-equivalent** (`LongSumAggregator.Handle`, `DoubleSumAggregator.Handle`, backing
+  `LongCounter`/`DoubleCounter`): `doRecordLong`/`doRecordDouble` is `current.add(value)` against a
+  `LongAdder`/`DoubleAdder` field. No `synchronized`. Lock-free, confirmed.
+- **Gauge-equivalent** (`DoubleLastValueAggregator.Handle`, backing `DoubleGauge`/observable
+  gauges): backed by `AtomicReference`/`AtomicLong`. No `synchronized`. Lock-free, confirmed.
+- **Histogram** (`DoubleExplicitBucketHistogramAggregator.Handle` — the SDK's **default**
+  aggregation for any `Histogram` instrument absent an explicit `View` override — backing
+  `DoubleHistogram`/`LongHistogram`, which is what `resiliencia-opentelemetry` uses for duration
+  metrics): `doRecordDouble` synchronizes on a private `Object lock` field on **every** recorded
+  value (`synchronized (lock) { this.sum += value; ...; this.counts[bucketIndex]++; }`) —
+  unconditionally, not periodically like Micrometer's rotation case above.
+  `DoubleBase2ExponentialHistogramAggregator.Handle` (the alternative exponential-histogram
+  aggregation, selectable via a `View`) also declares `doRecordDouble` and
+  `doAggregateThenMaybeResetDoubles` as `synchronized` methods.
+- `io.opentelemetry.api.metrics.DefaultMeter` (the no-op implementation used when no SDK
+  `MeterProvider` is configured, i.e. plain `opentelemetry-api` with nothing wired in) has trivial
+  empty-body `add(...)` methods — confirms that with the API dependency alone (no SDK), there is no
+  pinning risk at all; the risk only materializes once a consuming application adds the SDK and
+  records durations through a `Histogram`-kind instrument.
+
+**Confidence:** high for all bullets above — each is a direct read of the exact source file at the
+exact pinned tag (`v1.17.0` / `v1.63.0`), not inference from general recollection or a different
+version.
 
 ---
 
