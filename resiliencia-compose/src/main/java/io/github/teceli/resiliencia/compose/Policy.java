@@ -5,9 +5,11 @@ import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.api.Resilient;
 import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.core.api.ResilientTimeoutException;
+import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -102,14 +104,16 @@ public final class Policy<T> implements Resilient<T> {
                     NEVER_SUPPRESS));
 
     private final List<Resilient<T>> patterns;
+    private final List<ResilienceEvent.Listener> listeners;
 
-    private Policy(List<Resilient<T>> patterns) {
+    private Policy(List<Resilient<T>> patterns, List<ResilienceEvent.Listener> listeners) {
         if (patterns.isEmpty()) {
             throw new InvalidPolicyException(
                     "Policy must have at least one pattern",
                     "Call Policy.compose(pattern) with at least one Resilient pattern");
         }
         this.patterns = List.copyOf(patterns);
+        this.listeners = List.copyOf(listeners);
     }
 
     /**
@@ -117,7 +121,7 @@ public final class Policy<T> implements Resilient<T> {
      */
     public static <T> Policy<T> compose(Resilient<T> pattern) {
         Objects.requireNonNull(pattern, "pattern must not be null");
-        return new Policy<>(List.of(pattern));
+        return new Policy<>(List.of(pattern), List.of());
     }
 
     /**
@@ -126,16 +130,33 @@ public final class Policy<T> implements Resilient<T> {
      *
      * The new pattern is checked against every pattern already in the chain (transitively, not
      * just the adjacent one) for known-bad orderings: Retry wrapping CircuitBreaker is rejected
-     * with {@link InvalidPolicyException}; Timeout wrapping Retry logs a WARN but proceeds.
+     * with {@link InvalidPolicyException}; Timeout wrapping Retry logs a WARN but proceeds, also
+     * emitting a {@link PolicyValidationWarning} to any listener already attached via
+     * {@link #withListener(ResilienceEvent.Listener)}.
      *
      * @throws InvalidPolicyException if the resulting ordering is known to be broken at runtime
      */
     public Policy<T> and(Resilient<T> pattern) {
         Objects.requireNonNull(pattern, PATTERN_MUST_NOT_BE_NULL);
-        validateOrdering(patterns, pattern);
+        validateOrdering(pattern);
         var newPatterns = new ArrayList<>(patterns);
         newPatterns.add(pattern);
-        return new Policy<>(newPatterns);
+        return new Policy<>(newPatterns, listeners);
+    }
+
+    /**
+     * Add a listener notified of every {@link PolicyValidationWarning} emitted by this instance.
+     * Only observes warnings raised by {@link #and(Resilient)} calls made after this listener was
+     * attached — {@link #useOptimumOrder(Resilient[])} builds its entire chain in one call with no
+     * opportunity to attach a listener mid-build, so any warning it triggers is only visible via
+     * the SLF4J log, which always fires regardless. Listener exceptions are logged and otherwise
+     * ignored — a broken listener never affects the outcome.
+     */
+    public Policy<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
+        var newListeners = new ArrayList<>(listeners);
+        newListeners.add(listener);
+        return new Policy<>(patterns, newListeners);
     }
 
     /**
@@ -193,9 +214,13 @@ public final class Policy<T> implements Resilient<T> {
      * flattened into the {@link PatternKind}s it actually contains, so a Retry nested inside a
      * sub-Policy (or a CircuitBreaker hidden inside one) is still visible to the transitive check
      * — nesting a Policy must not bypass the guardrail a flat chain would have hit.
+     *
+     * Each WARN-severity rule that fires (and isn't suppressed) also emits a
+     * {@link PolicyValidationWarning} to the currently-registered listeners, in addition to,
+     * not instead of, the SLF4J {@code WARN} log — the log always fires regardless of listeners.
      */
-    private static <T> void validateOrdering(List<Resilient<T>> outerPatterns, Resilient<T> newPattern) {
-        Set<PatternKind> outerKinds = outerPatterns.stream()
+    private void validateOrdering(Resilient<T> newPattern) {
+        Set<PatternKind> outerKinds = patterns.stream()
                 .flatMap(outer -> flattenKinds(outer).stream())
                 .collect(Collectors.toSet());
         var newKinds = flattenKinds(newPattern);
@@ -206,7 +231,20 @@ public final class Policy<T> implements Resilient<T> {
                     throw new InvalidPolicyException(rule.problem(), rule.suggestedFix());
                 } else if (rule.severity() == OrderingRule.Severity.WARN && !rule.suppressWhen().test(newPattern)) {
                     log.warn("{}. {}.", rule.problem(), rule.suggestedFix());
+                    emit(new PolicyValidationWarning(
+                            Instant.now(), rule.outer(), rule.inner(), rule.problem(), rule.suggestedFix()));
                 }
+            }
+        }
+    }
+
+    /** Listener exceptions are logged, not thrown: a bad listener must not affect the outcome. */
+    private void emit(PolicyValidationWarning event) {
+        for (var listener : listeners) {
+            try {
+                listener.onEvent(event);
+            } catch (Exception ex) {
+                log.warn("Listener threw while handling {}", event, ex);
             }
         }
     }
