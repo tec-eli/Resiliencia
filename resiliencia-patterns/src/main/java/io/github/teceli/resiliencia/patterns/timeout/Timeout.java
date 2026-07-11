@@ -77,6 +77,7 @@ public record Timeout<T>(Duration timeout, boolean cancelOnTimeout, List<Resilie
      * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
      */
     public Timeout<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new Timeout<>(timeout, cancelOnTimeout, newListeners, clock);

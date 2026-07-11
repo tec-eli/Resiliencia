@@ -88,6 +88,7 @@ public final class Bulkhead<T> implements Resilient<T> {
      * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
      */
     public Bulkhead<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new Bulkhead<>(name, maxConcurrentCalls, maxWait, newListeners, clock);
