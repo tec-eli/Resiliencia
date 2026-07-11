@@ -147,6 +147,7 @@ public record Retry<T>(int maxAttempts, long initialDelayMs, double backoffMulti
      * exceptions are logged and otherwise ignored — a broken listener never affects the outcome.
      */
     public Retry<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new Retry<>(maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,

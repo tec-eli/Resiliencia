@@ -533,6 +533,12 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_throwNullPointerException_when_listenerIsNull() {
+        assertThrows(NullPointerException.class, () ->
+            CircuitBreaker.<String>of("test").withListener(null));
+    }
+
+    @Test
     void should_reportCircuitBreakerKind_when_patternKindQueried() {
         assertThat(CircuitBreaker.<String>of("test").patternKind()).isEqualTo(PatternKind.CIRCUIT_BREAKER);
         assertThat(CircuitBreaker.<String>of("test").patternName()).isEqualTo("circuit-breaker");

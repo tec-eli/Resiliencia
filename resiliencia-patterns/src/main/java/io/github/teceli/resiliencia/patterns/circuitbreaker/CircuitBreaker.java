@@ -15,7 +15,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.StampedLock;
@@ -210,6 +209,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * outcome.
      */
     public CircuitBreaker<T> withListener(ResilienceEvent.Listener listener) {
+        Objects.requireNonNull(listener, "listener must not be null");
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new CircuitBreaker<>(name, failureRateThreshold, slowCallRateThreshold, slowCallDurationThreshold,
@@ -253,11 +253,6 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     @Override
     public String patternName() {
         return "circuit-breaker";
-    }
-
-    @Override
-    public CompletableFuture<T> callAsync(Operation<T> operation) {
-        return Resilient.super.callAsync(operation);
     }
 
     @Override

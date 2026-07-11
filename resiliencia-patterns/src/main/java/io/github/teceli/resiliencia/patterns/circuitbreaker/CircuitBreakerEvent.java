@@ -8,10 +8,7 @@ import java.time.Instant;
 /**
  * Events emitted by the CircuitBreaker pattern.
  */
-public sealed interface CircuitBreakerEvent extends ResilienceEvent permits CircuitBreakerEvent.CallRecorded,
-    CircuitBreakerEvent.Closed,
-    CircuitBreakerEvent.HalfOpened,
-    CircuitBreakerEvent.Opened {
+public sealed interface CircuitBreakerEvent extends ResilienceEvent {
 
     @Override
     default String patternName() {
