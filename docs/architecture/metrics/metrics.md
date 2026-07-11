@@ -645,8 +645,7 @@ July 2026):
 *OpenTelemetry 1.63.0 (`opentelemetry-sdk-metrics`, the module an application wires in behind the
 `opentelemetry-api` interfaces `resiliencia-opentelemetry` depends on):*
 
-- There is no class named `SynchronizedAggregatorHandle` in the current source — that name from an
-  earlier draft of this document does not exist and has been removed. The actual base class is
+- The shared base class across all aggregations is
   `io.opentelemetry.sdk.metrics.internal.aggregator.AggregatorHandle`, and it contains **zero**
   `synchronized` code itself; `recordLong`/`recordDouble` delegate to an abstract
   `doRecordLong`/`doRecordDouble` implemented per concrete aggregation.
@@ -672,9 +671,7 @@ July 2026):
 
 **Confidence:** high for all bullets above — each is a direct read of the exact source file at the
 exact pinned tag (`v1.17.0` / `v1.63.0`), not inference from general recollection or a different
-version. The one prior unverified/incorrect claim (`SynchronizedAggregatorHandle`) has been
-corrected rather than merely hedged, since the real class and its behavior were locatable and
-readable directly.
+version.
 
 ---
 
