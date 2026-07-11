@@ -53,7 +53,7 @@ class ManualClockTest {
     void should_makeRetryBackoffInstant_when_pluggedIntoRetry() {
         var clock = ManualClock.create();
         var attempts = new AtomicInteger(0);
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-under-test")
                 .withMaxAttempts(3)
                 .withInitialDelay(60_000)
                 .withShouldRetry(e -> true)

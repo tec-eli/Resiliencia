@@ -29,7 +29,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_returnValue_when_operationCompletesWithinTimeout() {
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT);
 
         var result = timeout.call(() -> "done");
 
@@ -38,7 +38,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_throwResilienciaTimeoutException_when_operationExceedsTimeout() {
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 
         var exception = assertThrows(ResilientTimeoutException.class, () ->
             timeout.call(TimeoutPatternTest::blockUntilInterrupted));
@@ -48,7 +48,7 @@ class TimeoutPatternTest {
     @Test
     void should_interruptOperation_when_deadlinePasses() throws InterruptedException {
         var interrupted = new CountDownLatch(1);
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 
         assertThrows(ResilientTimeoutException.class, () -> timeout.call(() -> {
             try {
@@ -68,14 +68,14 @@ class TimeoutPatternTest {
 
     @Test
     void should_defaultCancelOnTimeoutToTrue_when_constructed() {
-        assertThat(Timeout.<String>of(GENEROUS_TIMEOUT).cancelOnTimeout()).isTrue();
+        assertThat(Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT).cancelOnTimeout()).isTrue();
     }
 
     @Test
     void should_notInterruptOperation_when_cancelOnTimeoutIsFalse() throws Exception {
         var interrupted = new CountDownLatch(1);
         var completedNaturally = new CountDownLatch(1);
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT).withCancelOnTimeout(false);
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT).withCancelOnTimeout(false);
 
         assertThrows(ResilientTimeoutException.class, () -> timeout.call(() -> {
             try {
@@ -99,7 +99,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_returnTimedOutOutcome_when_usingOutcomeMethod() {
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 
         var outcome = timeout.outcome(TimeoutPatternTest::blockUntilInterrupted);
 
@@ -110,7 +110,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_rethrowOriginalException_when_operationFailsBeforeDeadline() {
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT);
         var boom = new IllegalStateException("boom");
 
         var exception = assertThrows(IllegalStateException.class, () ->
@@ -122,7 +122,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_returnFailureOutcome_when_operationFailsBeforeDeadline() {
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT);
         var boom = new IllegalStateException("boom");
 
         var outcome = timeout.outcome(() -> {
@@ -137,7 +137,7 @@ class TimeoutPatternTest {
     @Test
     void should_emitSucceededEvent_when_operationCompletesWithinTimeout() {
         var events = new ArrayList<TimeoutEvent>();
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
 
         timeout.call(() -> "done");
@@ -152,7 +152,7 @@ class TimeoutPatternTest {
         // Synchronized: the abandoned worker may append its own Abandoned* event concurrently,
         // asynchronously with respect to this thread, once it reacts to the interrupt.
         var events = Collections.synchronizedList(new ArrayList<TimeoutEvent>());
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
 
         timeout.outcome(TimeoutPatternTest::blockUntilInterrupted);
@@ -168,7 +168,7 @@ class TimeoutPatternTest {
     void should_emitAbandonedWorkerFailedEvent_when_interruptedWorkerEventuallyThrows() throws InterruptedException {
         var events = Collections.synchronizedList(new ArrayList<TimeoutEvent>());
         var workerDone = new CountDownLatch(1);
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                 .withListener(event -> {
                     events.add((TimeoutEvent) event);
                     if (event instanceof TimeoutEvent.AbandonedWorkerFailed) {
@@ -192,7 +192,7 @@ class TimeoutPatternTest {
     void should_emitFailedEvent_when_operationFailsBeforeDeadline() {
         var events = new ArrayList<TimeoutEvent>();
         var boom = new IllegalStateException("boom");
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
 
         timeout.outcome(() -> {
@@ -209,7 +209,7 @@ class TimeoutPatternTest {
     void should_emitFailedEvent_when_operationThrowsErrorBeforeDeadline() {
         var events = new ArrayList<TimeoutEvent>();
         var boom = new OutOfMemoryError("boom");
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT)
                 .withListener(event -> events.add((TimeoutEvent) event));
 
         assertThrows(OutOfMemoryError.class, () -> timeout.outcome(() -> {
@@ -227,7 +227,7 @@ class TimeoutPatternTest {
         var events = Collections.synchronizedList(new ArrayList<TimeoutEvent>());
         var releaseWorker = new CountDownLatch(1);
         var workerDone = new CountDownLatch(1);
-        var timeout = Timeout.<String>of(SHORT_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT)
                 .withCancelOnTimeout(false)
                 .withListener(event -> {
                     events.add((TimeoutEvent) event);
@@ -259,7 +259,7 @@ class TimeoutPatternTest {
     void should_returnFailureOutcome_when_callerThreadInterruptedWhileWaiting() throws InterruptedException {
         var operationStarted = new CountDownLatch(1);
         var releaseOperation = new CountDownLatch(1);
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT);
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT);
         var outcomeRef = new AtomicReference<Outcome<String>>();
         var callerStarted = new CountDownLatch(1);
 
@@ -289,7 +289,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_returnOperationResult_when_listenerThrowsException() {
-        var timeout = Timeout.<String>of(GENEROUS_TIMEOUT)
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT)
                 .withListener(event -> {
                     throw new IllegalStateException("listener boom");
                 });
@@ -300,32 +300,38 @@ class TimeoutPatternTest {
     @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
-            .isThrownBy(() -> Timeout.<String>of(GENEROUS_TIMEOUT).withListener(null));
+            .isThrownBy(() -> Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT).withListener(null));
     }
 
     @Test
     void should_reportTimeoutKind_when_patternKindQueried() {
-        assertThat(Timeout.<String>of(GENEROUS_TIMEOUT).patternKind()).isEqualTo(PatternKind.TIMEOUT);
-        assertThat(Timeout.<String>of(GENEROUS_TIMEOUT).patternName()).isEqualTo("timeout");
+        assertThat(Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT).patternKind()).isEqualTo(PatternKind.TIMEOUT);
+        assertThat(Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT).patternName()).isEqualTo("timeout");
     }
 
     @Test
     void should_throwNullPointerException_when_timeoutIsNull() {
         assertThrows(NullPointerException.class, () ->
-            Timeout.<String>of(null));
+            Timeout.<String>of("timeout-under-test", null));
+    }
+
+    @Test
+    void should_throwNullPointerException_when_nameIsNull() {
+        assertThrows(NullPointerException.class, () ->
+            Timeout.<String>of(null, GENEROUS_TIMEOUT));
     }
 
     @Test
     void should_throwIllegalArgumentException_when_timeoutIsNotPositive() {
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Timeout.<String>of(Duration.ZERO));
+            .isThrownBy(() -> Timeout.<String>of("timeout-under-test", Duration.ZERO));
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> Timeout.<String>of(Duration.ofMillis(-1)));
+            .isThrownBy(() -> Timeout.<String>of("timeout-under-test", Duration.ofMillis(-1)));
     }
 
     @Test
     void should_returnNewInstance_when_witherCalled() {
-        var original = Timeout.<String>of(SHORT_TIMEOUT);
+        var original = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 
         var reconfigured = original.withTimeout(GENEROUS_TIMEOUT);
 
@@ -336,7 +342,7 @@ class TimeoutPatternTest {
 
     @Test
     void should_returnNewInstanceWithCancelOnTimeoutFalse_when_witherCalled() {
-        var original = Timeout.<String>of(SHORT_TIMEOUT);
+        var original = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 
         var reconfigured = original.withCancelOnTimeout(false);
 

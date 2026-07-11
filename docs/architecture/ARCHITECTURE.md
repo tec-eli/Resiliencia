@@ -28,7 +28,7 @@ for VT — documented as a risk in the README for users integrating resiliencia 
 
 ## Fluent API with reusable, immutable objects
 
-Configuration is fluent (`Retry.<T>create().withMaxAttempts(3)...`), but the resulting object is immutable and
+Configuration is fluent (`Retry.<T>create(name).withMaxAttempts(3)...`), but the resulting object is immutable and
 reusable — not a disposable builder. Each `withX` method returns a new instance (the "wither" convention, same as
 `LocalDate.withYear(...)`), never mutates the receiver. Pattern objects are thread-safe by design and compatible with
 dependency injection.

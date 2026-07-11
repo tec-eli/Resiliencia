@@ -45,7 +45,7 @@ public class RetryExample {
         var counter = new Object() { int value = 0; };
 
         // Default Retry only retries IOException; for other exceptions, use withShouldRetry
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("success-after-retry")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
                 .withBackoffMultiplier(BACKOFF_MULTIPLIER)
@@ -73,7 +73,7 @@ public class RetryExample {
 
         var counter = new Object() { int value = 0; };
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-exhaustion")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
                 .withShouldRetry(e -> true);  // Retry all exceptions for this example
@@ -97,7 +97,7 @@ public class RetryExample {
 
         var counter = new Object() { int value = 0; };
 
-        var retry = Retry.<String>create()
+        var retry = Retry.<String>create("retry-with-listener")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
                 .withShouldRetry(e -> true)  // Retry all exceptions for this example

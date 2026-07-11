@@ -34,7 +34,7 @@ designed around modern Java idioms: sealed interfaces, records, and pattern matc
 ### Single pattern
 
 ```java
-var retry = Retry.<String>create()
+var retry = Retry.<String>create("api-fetch-retry")
     .withMaxAttempts(3)
     .withInitialDelay(500)
     .withShouldRetry(IOException.class::isInstance);
