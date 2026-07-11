@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
+  SONAR_HOST_URL: https://sonarcloud.io
+
 jobs:
   spotbugs-pmd:
     runs-on: ubuntu-latest
@@ -42,3 +46,6 @@ jobs:
           mvn -B -pl '!resiliencia-metrics,!resiliencia-micrometer,!resiliencia-opentelemetry,
           !resiliencia-spring,!resiliencia-quarkus,!resiliencia-micronaut,!resiliencia-stress'
           org.apache.maven.plugins:maven-pmd-plugin:check
+
+      - name: SonarCloud Scan
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=tec-eli_resiliencia -Dsonar.organization=tec-eli
