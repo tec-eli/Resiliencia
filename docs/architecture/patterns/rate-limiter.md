@@ -19,15 +19,19 @@ caller waits up to `maxWait`. If no permit becomes available within that window,
 
 ## Configuration surface
 
-| Property  | Required | Description                                                      |
-|-----------|----------|------------------------------------------------------------------|
-| `limit`   | yes      | Maximum calls allowed per period                                 |
-| `period`  | yes      | How often the permit count resets                                |
-| `maxWait` | no       | How long to wait for a permit before rejecting. Default: no wait |
+| Property  | Required | Description                                                                                                          |
+|-----------|----------|------------------------------------------------------------------------------------------------------------------------|
+| `name`    | yes      | Identifier used in events and exceptions (instance-specific). First positional argument of `of(name, limit, period)`, no wither |
+| `limit`   | yes      | Maximum calls allowed per period                                                                                     |
+| `period`  | yes      | How often the permit count resets                                                                                    |
+| `maxWait` | no       | How long to wait for a permit before rejecting. Default: no wait                                                     |
 
 ---
 
 ## Events
+
+Every `RateLimiterEvent` carries `name` (the identifier passed to `of(name, limit, period)`), in addition to the
+fields below.
 
 - **Permitted** — a permit was granted, call will proceed. Carries: remaining permits in this period.
 - **Rejected** — no permit available within timeout. Carries: estimated time until next permit.
