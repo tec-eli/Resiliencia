@@ -467,6 +467,23 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_useSameInstantForEventAndState_when_circuitOpens() {
+        var clock = new ManualClock();
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withListener(event -> events.add((CircuitBreakerEvent) event)));
+
+        var opened = events.stream()
+                .filter(CircuitBreakerEvent.Opened.class::isInstance)
+                .map(CircuitBreakerEvent.Opened.class::cast)
+                .findFirst().orElseThrow();
+
+        assertThat(circuitBreaker.state())
+                .isInstanceOfSatisfying(CircuitState.Open.class, open ->
+                        assertThat(opened.timestamp()).isEqualTo(open.openedAt()));
+    }
+
+    @Test
     void should_reportCircuitBreakerKind_when_patternKindQueried() {
         assertThat(CircuitBreaker.<String>of("test").patternKind()).isEqualTo(PatternKind.CIRCUIT_BREAKER);
         assertThat(CircuitBreaker.<String>of("test").patternName()).isEqualTo("circuit-breaker");
