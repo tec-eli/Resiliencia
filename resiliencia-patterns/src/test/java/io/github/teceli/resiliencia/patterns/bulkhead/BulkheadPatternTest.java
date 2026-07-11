@@ -286,6 +286,32 @@ class BulkheadPatternTest {
     }
 
     @Test
+    void should_notOverflow_when_maxWaitExceedsMaxMillisDuration() throws Exception {
+        // Duration.toMillis() would throw ArithmeticException for a duration this large;
+        // Bulkhead must clamp it to Long.MAX_VALUE instead of letting that escape.
+        var bulkhead = Bulkhead.<String>of("bulkhead", 1).withMaxWait(Duration.ofMillis(Long.MAX_VALUE).plusDays(1));
+        var holderInside = new CountDownLatch(1);
+        var releaseHolder = new CountDownLatch(1);
+
+        var holder = Thread.ofVirtual().start(() -> bulkhead.call(() -> {
+            holderInside.countDown();
+            awaitQuietly(releaseHolder);
+            return "holder";
+        }));
+        assertThat(holderInside.await(5, TimeUnit.SECONDS)).isTrue();
+
+        var waiterResult = new AtomicReference<String>();
+        var waiter = Thread.ofVirtual().start(() -> waiterResult.set(bulkhead.call(() -> "waited")));
+
+        Thread.sleep(50);
+        releaseHolder.countDown();
+        holder.join(Duration.ofSeconds(5));
+        waiter.join(Duration.ofSeconds(5));
+
+        assertThat(waiterResult.get()).isEqualTo("waited");
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
             .isThrownBy(() -> Bulkhead.<String>of("bulkhead", 1).withListener(null));

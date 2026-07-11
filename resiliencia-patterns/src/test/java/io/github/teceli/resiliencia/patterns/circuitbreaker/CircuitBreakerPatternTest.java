@@ -484,6 +484,55 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_countErrorTowardFailureRate_when_thrownWhileClosed() {
+        // An Error is never wrapped into Outcome, but it is still recorded into the sliding
+        // window as a failed call (see CircuitBreaker.outcome()'s catch (Error e) block). This
+        // is not limited to HalfOpen permit bookkeeping the way docs/architecture/ARCHITECTURE.md's
+        // "Error handling" section frames it — it also feeds the Closed-state window and can open
+        // the circuit, exactly like any other recorded failure.
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withSlidingWindowSize(2)
+                .withFailureRateThreshold(0.5);
+
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> {
+            throw new TestError();
+        }));
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> {
+            throw new TestError();
+        }));
+
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Open.class);
+    }
+
+    @Test
+    void should_reportStaleFailureRate_when_halfOpenTestCallSucceedsRightAfterClosedPeriodFailures() {
+        // Characterizes current, undecided behavior: the sliding window is not reset on
+        // Open -> HalfOpen (only on the transition to Closed), so a HalfOpen test call's
+        // CallRecorded event reports a currentFailureRate still dominated by the Closed-period
+        // data that tripped the circuit open, not just the HalfOpen test calls themselves.
+        // docs/architecture/patterns/circuit-breaker.md does not specify this either way.
+        var clock = new ManualClock();
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withListener(event -> events.add((CircuitBreakerEvent) event)));
+        clock.advance(WAIT_DURATION);
+
+        circuitBreaker.call(() -> "half-open test call");
+
+        var recorded = events.stream()
+                .filter(CircuitBreakerEvent.CallRecorded.class::isInstance)
+                .map(CircuitBreakerEvent.CallRecorded.class::cast)
+                .toList();
+        assertThat(recorded).last().satisfies(last -> {
+            assertThat(last.isSuccessful()).isTrue();
+            assertThat(last.currentFailureRate())
+                    .as("stale: one slot of the size-2 window still carries a Closed-period "
+                            + "failure that tripped the circuit, not just this HalfOpen test call")
+                    .isEqualTo(0.5);
+        });
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThrows(NullPointerException.class, () ->
             CircuitBreaker.<String>of("test").withListener(null));

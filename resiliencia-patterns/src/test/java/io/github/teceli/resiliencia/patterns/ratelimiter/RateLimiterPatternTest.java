@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -187,6 +188,50 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_notOverflow_when_maxWaitExceedsMaxMillisDuration() {
+        // Instant.plus() would overflow for a duration this large; RateLimiter must clamp it
+        // to MAX_MILLIS_DURATION instead of letting ArithmeticException/DateTimeException escape.
+        var manualClock = new ManualClock();
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, PERIOD)
+                .withMaxWait(Duration.ofMillis(Long.MAX_VALUE).plusDays(1))
+                .withClock(manualClock);
+        limiter.call(() -> "first");
+
+        assertThat(limiter.call(() -> "waited")).isEqualTo("waited");
+    }
+
+    @Test
+    void should_backOffThenYield_when_casRetriesExceedSpinThreshold() throws InterruptedException {
+        // Exercises the CAS-retry back-off path in tryAcquire (Thread.onSpinWait() below the
+        // threshold, Thread.yield() above it) under enough contention that some threads are
+        // guaranteed to exceed CAS_SPIN_RETRY_THRESHOLD before succeeding. This does not assert
+        // internal counters directly (private), only that every permit is still granted exactly
+        // once despite it, i.e. the back-off path itself never loses or double-grants a permit.
+        var threadCount = 64;
+        var limiter = RateLimiter.<Integer>of("rate-limiter", threadCount, Duration.ofSeconds(30));
+        var ready = new CountDownLatch(threadCount);
+        var start = new CountDownLatch(1);
+        var done = new CountDownLatch(threadCount);
+        var granted = new AtomicInteger();
+
+        for (var i = 0; i < threadCount; i++) {
+            Thread.ofVirtual().start(() -> {
+                ready.countDown();
+                awaitQuietly(start);
+                limiter.call(() -> 1);
+                granted.incrementAndGet();
+                done.countDown();
+            });
+        }
+
+        ready.await();
+        start.countDown();
+        assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(granted.get()).isEqualTo(threadCount);
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
             .isThrownBy(() -> RateLimiter.<String>of("rate-limiter", 1, PERIOD).withListener(null));
@@ -262,6 +307,15 @@ class RateLimiterPatternTest {
                 .as("exactly the configured limit should be granted, even under heavy CAS contention")
                 .isEqualTo(limit);
         assertThat(rejected.get()).isEqualTo(threadCount - limit);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("interrupted", e);
+        }
     }
 
     /**
