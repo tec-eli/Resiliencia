@@ -48,4 +48,4 @@ jobs:
           org.apache.maven.plugins:maven-pmd-plugin:check
 
       - name: SonarCloud Scan
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=teceli_resiliencia -Dsonar.organization=teceli
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=tec-eli_resiliencia -Dsonar.organization=tec-eli
