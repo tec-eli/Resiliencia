@@ -95,6 +95,7 @@ still letting callers distinguish "interrupted" (e.g. graceful shutdown, cancell
 | `overallDeadlineMs` | no       | Total wall-clock budget across all attempts and backoff waits, checked between attempts. Must be >= 0 | uncapped                        |
 | `shouldRetry`       | no       | Predicate — retry only if it returns true for the thrown exception                                    | `e -> e instanceof IOException` |
 | `listeners`         | no       | `ResilienceEvent.Listener` instances notified of each `RetryEvent`                                    | none                            |
+| `clock`             | no       | `withClock()` — custom Clock, e.g. a manual/virtual clock in tests to make backoff assertions deterministic and instant | system clock |
 
 ---
 

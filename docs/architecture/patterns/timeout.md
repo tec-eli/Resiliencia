@@ -17,14 +17,37 @@ A `cancelOnTimeout` flag controls whether the virtual thread is interrupted on t
 still receives the exception immediately, but the operation thread is allowed to finish naturally. This is useful when
 the operation holds resources that must be released cleanly.
 
+### Caller interrupted while waiting
+
+`outcome()` waits for the worker via `worker.join(timeout)`. If the *calling* thread itself is interrupted while
+blocked in that `join()` — a different event from the deadline elapsing — the worker is interrupted (best-effort
+cleanup, mirroring the `cancelOnTimeout` path) and the caller's own interrupt status is restored before returning.
+This resolves as an `Outcome.Failure` wrapping a `ResilientException` ("Interrupted while waiting for operation to
+complete"), never as `Outcome.TimedOut`: the deadline did not necessarily elapse, so reporting a timeout would be
+misleading. No `TimeoutEvent` is emitted for this path — it is an interruption of the *caller*, not a pattern
+outcome the worker itself observed.
+
+### Error handling
+
+`Error` is never wrapped into `Outcome` (see "Error handling" in `docs/architecture/ARCHITECTURE.md`). Because the
+operation runs on a separate worker thread, `Timeout` must catch `Error` there to observe it at all; it stores the
+`Error` and rethrows it unchanged on the caller's thread once `join()` confirms the worker finished — the caller
+never sees an `Outcome` for that call, only the rethrown `Error` itself. A `TimeoutEvent.Failed` is still emitted
+first, carrying the `Error` as its cause, the same event type used for an ordinary `Exception` failure. If the
+deadline already passed before the worker's `Error` is observed, the caller already received `Outcome.TimedOut`
+instead, and the `Error`'s eventual disposition is only reported best-effort via `TimeoutEvent.AbandonedWorkerFailed`
+— same as any other abandoned-worker outcome (see above).
+
 ---
 
 ## Configuration surface
 
-| Property          | Required | Description                                               |
-|-------------------|----------|-----------------------------------------------------------|
-| `timeout`         | yes      | Maximum time allowed for the operation                    |
-| `cancelOnTimeout` | no       | Whether to interrupt the thread on timeout. Default: true |
+| Property           | Required | Description                                                     |
+|---------------------|----------|-------------------------------------------------------------------|
+| `timeout`           | yes      | Maximum time allowed for the operation                            |
+| `cancelOnTimeout`   | no       | Whether to interrupt the thread on timeout. Default: true         |
+| `withListener()`    | no       | Subscribe to timeout events (e.g. TimedOut, Succeeded, Failed)     |
+| `withClock()`       | no       | Custom Clock for event timestamps (testing). Does not affect the deadline, which is enforced against real elapsed time |
 
 ---
 

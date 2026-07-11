@@ -252,6 +252,36 @@ class PolicyTest {
                                 .hasMessage("original non-resiliencia exception"));
     }
 
+    @Test
+    void should_reportOwnDeadline_when_composedPatternHasOverallDeadline() {
+        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+                .withOverallDeadline(5_000);
+
+        var policy = Policy.compose(retryWithDeadline);
+
+        assertThat(policy.hasOwnDeadline()).isTrue();
+    }
+
+    @Test
+    void should_reportNoOwnDeadline_when_noComposedPatternHasOne() {
+        var retry = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10);
+
+        var policy = Policy.compose(retry);
+
+        assertThat(policy.hasOwnDeadline()).isFalse();
+    }
+
+    @Test
+    void should_reportOwnDeadline_when_deadlineIsOnlyInsideNestedPolicy() {
+        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+                .withOverallDeadline(5_000);
+        var nestedPolicy = Policy.compose(retryWithDeadline);
+
+        var outerPolicy = Policy.compose(nestedPolicy);
+
+        assertThat(outerPolicy.hasOwnDeadline()).isTrue();
+    }
+
     private static Resilient<String> recordingPattern(List<String> callOrder, String name) {
         return new Resilient<>() {
             @Override

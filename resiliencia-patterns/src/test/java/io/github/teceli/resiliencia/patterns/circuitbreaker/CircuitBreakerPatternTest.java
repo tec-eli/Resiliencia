@@ -467,6 +467,23 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_useSameInstantForEventAndState_when_circuitOpens() {
+        var clock = new ManualClock();
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withListener(event -> events.add((CircuitBreakerEvent) event)));
+
+        var opened = events.stream()
+                .filter(CircuitBreakerEvent.Opened.class::isInstance)
+                .map(CircuitBreakerEvent.Opened.class::cast)
+                .findFirst().orElseThrow();
+
+        assertThat(circuitBreaker.state())
+                .isInstanceOfSatisfying(CircuitState.Open.class, open ->
+                        assertThat(opened.timestamp()).isEqualTo(open.openedAt()));
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThrows(NullPointerException.class, () ->
             CircuitBreaker.<String>of("test").withListener(null));

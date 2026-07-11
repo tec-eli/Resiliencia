@@ -51,6 +51,9 @@ open-ended one. Do not proceed with an assumption on unresolved design questions
   mvn test
   ```
 - **Do not introduce external dependencies** in `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose`.
+  **Accepted exception:** `slf4j-api` (compile-scope) in `resiliencia-patterns` and `resiliencia-compose`, since
+  SLF4J-based logging is mandated project-wide (see "Logging" below) and a bespoke no-dependency logging shim isn't
+  worth the churn. `resiliencia-core` still has zero dependencies of any kind.
 - Integration modules (Spring, Quarkus, Micrometer, OpenTelemetry) may have dependencies, but always get explicit
   approval before adding any.
 
@@ -88,8 +91,7 @@ resiliencia/
 - **Bulkhead** uses semaphores — blocking a virtual thread is cheap
 - **Composition (`Policy`)** uses plain virtual-thread interruption for cancellation today, **not** structured
   concurrency (it was still preview in Java 21). Do not introduce structured concurrency into `resiliencia-core`,
-  `resiliencia-patterns`, or `resiliencia-compose` — it's reserved for a future `resiliencia-java25` module once
-  Java 23+ is the target there.
+  `resiliencia-patterns`, or `resiliencia-compose`.
 - No `ExecutorService` with platform threads in core modules
 
 **2. Sealed interfaces for domain types**
@@ -240,11 +242,12 @@ Foundation: `Resilient` (call, callAsync, outcome), sealed `Outcome<T>`, excepti
 
 ### resiliencia-patterns
 The 5 resilience patterns — Retry, Timeout, CircuitBreaker, Bulkhead, RateLimiter. Each implements `Resilient`, emits
-sealed event types, thread-safe and reusable. **Zero external dependencies. Never add any.**
+sealed event types, thread-safe and reusable. **Zero external dependencies beyond the accepted `slf4j-api` exception
+above. Never add any other.**
 
 ### resiliencia-compose
 `Policy`: fluent pattern composition with explicit, validated order (see Design Principle 6 above).
-**Zero external dependencies. Never add any.**
+**Zero external dependencies beyond the accepted `slf4j-api` exception above. Never add any other.**
 
 ### resiliencia-metrics
 Abstract `ResilienciaMetrics` interface (counter, gauge, timer) and `NoOpMetrics` default. **Zero external
@@ -285,7 +288,7 @@ jcstress concurrency tests. Not published. Run before releases.
 
 - **Create git commits without explicit user request.** Only commit when the user explicitly asks. Staging changes is OK, but commits require authorization.
 - Refactor, rename, or restructure existing code unless explicitly asked
-- Add external dependencies to `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose` without explicit approval
+- Add external dependencies to `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose` without explicit approval — including to the accepted `slf4j-api` exception itself; that one dependency is fixed, not a precedent for adding others
 - Add external dependencies to other modules without approval
 - Generate placeholder or `TODO` implementations and present them as done
 - Use `System.out.println` in production code
@@ -294,7 +297,7 @@ jcstress concurrency tests. Not published. Run before releases.
 - Import `internal/` packages — these are not exported by the module system
 - Use checked exceptions — all exceptions must extend `RuntimeException`
 - Use `ExecutorService` with platform threads in core modules
-- Use structured concurrency in `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose` — reserved for `resiliencia-java25`
+- Use structured concurrency in `resiliencia-core`, `resiliencia-patterns`, or `resiliencia-compose`
 - Depend on Micrometer or other observability libraries in core modules — use the `ResilienceEventListener` SPI instead
 - Silently reorder a user-supplied `Policy` pattern chain
 

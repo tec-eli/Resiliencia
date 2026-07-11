@@ -278,6 +278,21 @@ class PolicyOrderValidationTest {
     }
 
     @Test
+    void should_suppressTimeoutWrapsRetryWarn_when_nestedPolicyRetryHasOverallDeadline() {
+        // The Retry with its own deadline sits inside a nested Policy rather than being added
+        // directly — hasOwnDeadline() must flatten through the nesting for suppression to still work.
+        var timeout = fakePattern(PatternKind.TIMEOUT);
+        var retryWithDeadline = Retry.<String>create().withMaxAttempts(2).withInitialDelay(10)
+                .withOverallDeadline(5_000);
+        var nestedRetryPolicy = Policy.compose(retryWithDeadline);
+
+        var stderr = captureStdErr(() ->
+                assertThatNoException().isThrownBy(() -> Policy.compose(timeout).and(nestedRetryPolicy)));
+
+        assertThat(stderr).doesNotContain("WARN");
+    }
+
+    @Test
     void should_throwInvalidPolicyException_when_useOptimumOrderReceivesNoPatterns() {
         var exception = assertThrows(InvalidPolicyException.class, Policy::<String>useOptimumOrder);
         assertThat(exception).hasMessageContaining("at least one pattern");
