@@ -15,9 +15,7 @@ Virtual threads (Java 21+) are not an option — they are the central implementa
 - No `ExecutorService` with platform threads is created in core modules
 - Pattern composition (`Policy`) currently uses **plain virtual-thread interruption**, not structured concurrency —
   structured concurrency was still preview in Java 21 (stable in 23+), and requiring `--enable-preview` is not
-  acceptable to place on every consumer of a Java 21-targeted library. Real structured concurrency support may be
-  added later in `resiliencia-java25`, a separate module targeting newer Java versions, once it's stable and doesn't
-  force a minimum-version bump on everyone else.
+  acceptable to place on every consumer of a Java 21-targeted library.
 
 **Rejected alternatives:** platform thread pools (adds nothing new, limits scale); a fully reactive API à la
 Reactor/RxJava (accidental complexity, external deps, unnecessary once VT is available); making VT optional (adds
@@ -132,7 +130,7 @@ number):
 Core (no external deps):        resiliencia-core, resiliencia-patterns, resiliencia-compose
 Observability (optional):       resiliencia-metrics, resiliencia-micrometer, resiliencia-opentelemetry
 Framework integrations (opt.):  resiliencia-spring, resiliencia-quarkus, resiliencia-micronaut
-Developer modules (not the lib):resiliencia-test, resiliencia-stress, resiliencia-examples, resiliencia-java25
+Developer modules (not the lib):resiliencia-test, resiliencia-stress, resiliencia-examples
 ```
 
 `resiliencia-stress` and `resiliencia-examples` live in the repo but are explicitly excluded from deploy — not
