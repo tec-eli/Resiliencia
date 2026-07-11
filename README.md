@@ -8,6 +8,7 @@
 [![Java](https://img.shields.io/badge/java-21%2B-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.teceli/resiliencia.svg)](https://central.sonatype.com/artifact/io.github.teceli/resiliencia)
 [![Build & Test](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=teceli_resiliencia&metric=alert_status)](https://sonarcloud.io/summary/overall_health/key=teceli_resiliencia)
 [![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/Resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/Resiliencia)
 [![CodeQL](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml)
