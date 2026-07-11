@@ -44,6 +44,7 @@ instead, and the `Error`'s eventual disposition is only reported best-effort via
 
 | Property           | Required | Description                                                     |
 |---------------------|----------|-------------------------------------------------------------------|
+| `name`              | yes      | Identifier used in events (instance-specific). First positional argument of `of(name, timeout)`, no wither |
 | `timeout`           | yes      | Maximum time allowed for the operation                            |
 | `cancelOnTimeout`   | no       | Whether to interrupt the thread on timeout. Default: true         |
 | `withListener()`    | no       | Subscribe to timeout events (e.g. TimedOut, Succeeded, Failed)     |
@@ -51,7 +52,25 @@ instead, and the `Error`'s eventual disposition is only reported best-effort via
 
 ---
 
+## Key Concepts
+
+### `name` vs `patternName()`
+
+- **`name`**: Instance-specific identifier (e.g., `"downstream-call-timeout"`). Appears in every `TimeoutEvent`. Set
+  at construction via `of(name, timeout)`, no wither — identity, not runtime-changeable configuration. Required,
+  matching the convention already established by `CircuitBreaker`, `Bulkhead`, and `RateLimiter`. Not enforced
+  unique across instances — there is no registry to check against (see "No global registry" in `ARCHITECTURE.md`).
+- **`patternName()`**: Type identifier, always `"timeout"`. Used for observability/telemetry when grouping by
+  pattern type, independent of instance.
+
+Added for consistency with the other four patterns — see `docs/architecture/metrics/metrics.md`'s "Identity"
+section. This is a breaking change to every existing `Timeout.<T>of(timeout)` call site.
+
+---
+
 ## Events
+
+Every `TimeoutEvent` carries `name` (the identifier passed to `of(name, timeout)`), in addition to the fields below.
 
 - **TimedOut** — the operation exceeded the limit. Carries: configured limit.
 - **Succeeded** — the operation completed within the limit. Carries: elapsed time.

@@ -1,22 +1,31 @@
 # resiliencia-metrics
 
-Backend-neutral metrics interfaces derived from the pattern event system: state snapshots, counters,
-aggregates. This module defines the contract; it does not ship a metrics backend itself.
+Backend-neutral metrics interfaces derived from the pattern and Policy event system: state snapshots,
+counters. This module defines the contract; it does not ship a metrics backend itself.
 
-Depends on `resiliencia-core` and `resiliencia-patterns` (consumes typed pattern events).
+Full design: `docs/architecture/metrics/metrics.md`.
+
+Depends on `resiliencia-core`, `resiliencia-patterns`, **and** `resiliencia-compose` — the last one
+specifically so `ResilienceMetricsListener` can reference `PolicyValidationWarning`, which is defined in
+`compose` (that's where Policy's order-validation logic actually lives).
 
 ## Scope
 
-- Neutral interfaces for exposing pattern state as metrics (e.g. CircuitBreaker state snapshot, Retry
-  attempt counters, Bulkhead permit gauges, RateLimiter window counters).
-- Aggregation logic derived purely from typed events (`RetryEvent`, `PolicyValidationWarning`, etc.) — no
-  polling, no reflection into pattern internals.
+- `ResilienceMetrics`: a small backend interface (`record(Snapshot)`, `record(Counters)`) that
+  `resiliencia-micrometer`/`resiliencia-opentelemetry` implement.
+- `ResilienceMetricsListener`: translates typed events (`RetryEvent`, `TimeoutEvent`, `CircuitBreakerEvent`,
+  `BulkheadEvent`, `RateLimiterEvent`, `PolicyValidationWarning`) into `Snapshot`/`Counters` emissions — no
+  polling, no reflection into pattern internals; every value mirrors what the source event already carried.
 - Serves as the foundation `resiliencia-micrometer` and `resiliencia-opentelemetry` implement against.
 
 ## Non-goals
 
 - No concrete backend integration (Micrometer, OpenTelemetry, Prometheus, etc.) — those are separate
   modules that depend on this one.
-- No logging — logging concerns are handled independently via `System.Logger` in lower modules; this
-  module is metrics-only.
+- No independent aggregation/windowing state — gauges mirror the pattern's own already-computed values,
+  never a second, independently-tracked window (see `metrics.md`'s "Windowing coherence").
 - Does not implement `Policy` or pattern logic — read-only observer of events produced elsewhere.
+- Logging is minimal and internal-failure-only: `ResilienceMetricsListener` logs at WARN via SLF4J when a
+  backend's `record(...)` call throws, so a broken backend never propagates into the protected call. This
+  supersedes an earlier, informally-assumed direction toward `System.Logger` — see `ARCHITECTURE.md`'s
+  "Logging" section for why SLF4J was chosen project-wide instead.

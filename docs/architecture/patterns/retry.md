@@ -38,17 +38,17 @@ subclasses. If the composition is meant to retry a per-attempt timeout, a reject
 `shouldRetry` must be extended explicitly to cover the relevant exception type(s); the default is deliberately
 narrow and does not widen itself based on what it's composed with.
 
-Retry is configured via `Retry.<T>create()` followed by `withX` copy methods (each returns a new, independently
+Retry is configured via `Retry.<T>create(name)` followed by `withX` copy methods (each returns a new, independently
 usable `Retry` instance rather than mutating the receiver):
 
 ```java
-var retry = Retry.<String>create()
+var retry = Retry.<String>create("payment-retry")
     .withMaxAttempts(3)
     .withInitialDelay(100)
     .withBackoffMultiplier(2.0);
 // Uses default: retries only IOException
 
-var customRetry = Retry.<String>create()
+var customRetry = Retry.<String>create("payment-retry")
     .withMaxAttempts(3)
     .withShouldRetry(e -> e instanceof IOException || e instanceof CustomTemporaryException);
 ```
@@ -87,6 +87,7 @@ still letting callers distinguish "interrupted" (e.g. graceful shutdown, cancell
 
 | Property            | Required | Description                                                                                           | Default                         |
 |---------------------|----------|-------------------------------------------------------------------------------------------------------|---------------------------------|
+| `name`              | yes      | Identifier used in events (instance-specific). First positional argument of `create(name)`, no wither | —                                |
 | `maxAttempts`       | no       | Total attempts including the first call. Must be >= 1                                                 | 3                               |
 | `initialDelayMs`    | no       | Wait before the first retry, in milliseconds. Must be >= 0                                            | 100                             |
 | `backoffMultiplier` | no       | Factor the delay is multiplied by after each attempt. Must be >= 1.0                                  | 2.0                             |
@@ -99,17 +100,37 @@ still letting callers distinguish "interrupted" (e.g. graceful shutdown, cancell
 
 ---
 
+## Key Concepts
+
+### `name` vs `patternName()`
+
+- **`name`**: Instance-specific identifier (e.g., `"payment-retry"`, `"auth-service-retry"`). Appears in every
+  `RetryEvent`. Set at construction via `create(name)`, no wither — identity, not runtime-changeable configuration.
+  Required, matching the convention already established by `CircuitBreaker`, `Bulkhead`, and `RateLimiter`. Not
+  enforced unique across instances — there is no registry to check against (see "No global registry" in
+  `ARCHITECTURE.md`); two `Retry` instances sharing a `name` will produce indistinguishable events/metrics.
+- **`patternName()`**: Type identifier, always `"retry"`. Used for observability/telemetry when grouping by pattern
+  type, independent of instance.
+
+Added for consistency with the other four patterns, closing a prior asymmetry where `Retry` (and `Timeout`) had no
+instance identity while `CircuitBreaker`/`Bulkhead`/`RateLimiter` did — see `docs/architecture/metrics/metrics.md`'s
+"Identity" section for why this mattered concretely for metrics tagging. This is a breaking change to every existing
+`Retry.<T>create()` call site.
+
+---
+
 ## Events
 
-Retry emits a `RetryEvent` after each significant moment:
+Retry emits a `RetryEvent` after each significant moment. Every event carries `name` (the identifier passed to
+`create(name)`), in addition to the fields below:
 
-- **AttemptFailed** — a call was made and failed. Carries: timestamp, attempt number, the thrown exception.
-- **Success** — a call completed successfully. Carries: timestamp, total attempts taken.
+- **AttemptFailed** — a call was made and failed. Carries: timestamp, name, attempt number, the thrown exception.
+- **Success** — a call completed successfully. Carries: timestamp, name, total attempts taken.
 - **Exhausted** — all attempts failed, whether because `maxAttempts` was reached or the overall deadline elapsed.
-  Carries: timestamp, total attempts, the last exception.
+  Carries: timestamp, name, total attempts, the last exception.
 - **Rejected** — `shouldRetry` declined to retry a failure before the attempt budget (count or deadline) was
-  exhausted. Carries: timestamp, attempt number, the rejected exception.
-- **Interrupted** — the thread was interrupted while waiting for a backoff delay. Carries: timestamp, attempt
+  exhausted. Carries: timestamp, name, attempt number, the rejected exception.
+- **Interrupted** — the thread was interrupted while waiting for a backoff delay. Carries: timestamp, name, attempt
   number, the last real failure (not the interrupt itself).
 
 ---
