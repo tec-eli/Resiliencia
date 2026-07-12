@@ -17,12 +17,12 @@ public final class NoOpMetrics implements ResilienceMetrics {
   private NoOpMetrics() {}
 
   @Override
-  public void record(Snapshot snapshot) {
+  public void observe(Snapshot snapshot) {
     // No-op: discard
   }
 
   @Override
-  public void record(Counters counters) {
+  public void observe(Counters counters) {
     // No-op: discard
   }
 }

@@ -2,7 +2,7 @@ package io.github.teceli.resiliencia.metrics;
 
 /**
  * Backend-facing contract that concrete metrics implementations (Micrometer, OpenTelemetry, custom)
- * must implement to record pattern and Policy events as metrics.
+ * must implement to observe pattern and Policy events as metrics.
  *
  * <p><strong>Implementation contract:</strong>
  * <ul>
@@ -14,22 +14,22 @@ package io.github.teceli.resiliencia.metrics;
  * </ul>
  *
  * <p>Each backend implementation performs its own exhaustive {@code switch} over the sealed
- * {@link Snapshot} and {@link Counters} hierarchies inside its {@code record(...)} method bodies,
+ * {@link Snapshot} and {@link Counters} hierarchies inside its {@code observe(...)} method bodies,
  * guaranteed to compile only when all cases are handled.
  */
 public interface ResilienceMetrics {
   /**
-   * Record a gauge-worthy snapshot of live state from CircuitBreaker, Bulkhead, or RateLimiter.
+   * Observe a gauge-worthy snapshot of live state from CircuitBreaker, Bulkhead, or RateLimiter.
    *
-   * @param snapshot the snapshot to record; never null
+   * @param snapshot the snapshot to observe; never null
    */
-  void record(Snapshot snapshot);
+  void observe(Snapshot snapshot);
 
   /**
-   * Record a counter/timer-worthy occurrence from any pattern (Retry, Timeout, CircuitBreaker,
+   * Observe a counter/timer-worthy occurrence from any pattern (Retry, Timeout, CircuitBreaker,
    * Bulkhead, RateLimiter) or from Policy's order validation.
    *
-   * @param counters the counter event to record; never null
+   * @param counters the counter event to observe; never null
    */
-  void record(Counters counters);
+  void observe(Counters counters);
 }
