@@ -442,6 +442,72 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_emitRejectedEventWithOpenPhase_when_callRejectedWhileOpen() {
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(new ManualClock())
+                .withListener(event -> events.add((CircuitBreakerEvent) event)));
+
+        circuitBreaker.outcome(() -> "rejected");
+
+        assertThat(events)
+                .filteredOn(CircuitBreakerEvent.Rejected.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(CircuitBreakerEvent.Rejected.class, rejected -> {
+                    assertThat(rejected.name()).isEqualTo("test");
+                    assertThat(rejected.phase()).isEqualTo(CircuitBreakerEvent.RejectingPhase.OPEN);
+                });
+    }
+
+    @Test
+    void should_emitRejectedEventWithHalfOpenPhase_when_noPermitsLeftInHalfOpen() throws Exception {
+        var clock = new ManualClock();
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withSlidingWindowSize(2)
+                .withFailureRateThreshold(0.5)
+                .withWaitDurationInOpenState(WAIT_DURATION)
+                .withPermittedCallsInHalfOpenState(1)
+                .withClock(clock)
+                .withListener(event -> events.add((CircuitBreakerEvent) event));
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        clock.advance(WAIT_DURATION);
+
+        var insideOperation = new CountDownLatch(1);
+        var releaseHolder = new CountDownLatch(1);
+        var holder = Thread.ofVirtual().start(() -> circuitBreaker.outcome(() -> {
+            insideOperation.countDown();
+            awaitQuietly(releaseHolder);
+            return "half-open test call";
+        }));
+        assertThat(insideOperation.await(5, TimeUnit.SECONDS)).isTrue();
+
+        circuitBreaker.outcome(() -> "should not run");
+
+        releaseHolder.countDown();
+        holder.join(Duration.ofSeconds(5));
+
+        assertThat(events)
+                .filteredOn(CircuitBreakerEvent.Rejected.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(CircuitBreakerEvent.Rejected.class, rejected ->
+                        assertThat(rejected.phase()).isEqualTo(CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
+    }
+
+    @Test
+    void should_notEmitRejectedEvent_when_callProceedsToHalfOpenTestCall() {
+        var clock = new ManualClock();
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withListener(event -> events.add((CircuitBreakerEvent) event)));
+
+        clock.advance(WAIT_DURATION);
+        circuitBreaker.call(() -> "test call");
+
+        assertThat(events).noneMatch(CircuitBreakerEvent.Rejected.class::isInstance);
+    }
+
+    @Test
     void should_returnOperationResult_when_listenerThrowsException() {
         var circuitBreaker = CircuitBreaker.<String>of("test")
                 .withListener(event -> {

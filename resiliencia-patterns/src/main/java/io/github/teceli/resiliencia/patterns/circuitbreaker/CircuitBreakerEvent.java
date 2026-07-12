@@ -20,6 +20,11 @@ public sealed interface CircuitBreakerEvent extends ResilienceEvent {
         SLOW_CALL_RATE_EXCEEDED
     }
 
+    enum RejectingPhase {
+        OPEN,
+        HALF_OPEN
+    }
+
     record Opened(Instant timestamp, String name, Reason reason) implements CircuitBreakerEvent {}
 
     record Closed(Instant timestamp, String name, int numberOfSuccessfulTestCalls) implements CircuitBreakerEvent {
@@ -29,4 +34,6 @@ public sealed interface CircuitBreakerEvent extends ResilienceEvent {
 
     record CallRecorded(Instant timestamp, String name, boolean isSuccessful, Duration elapsedTime,
                          double currentFailureRate) implements CircuitBreakerEvent {}
+
+    record Rejected(Instant timestamp, String name, RejectingPhase phase) implements CircuitBreakerEvent {}
 }

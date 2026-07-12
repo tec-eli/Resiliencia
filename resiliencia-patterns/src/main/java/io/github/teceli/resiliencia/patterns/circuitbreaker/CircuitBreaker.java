@@ -321,6 +321,8 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 var deadline = open.openedAt().plus(waitDurationInOpenState);
                 var now = clock.instant();
                 if (now.isBefore(deadline)) {
+                    emit(new CircuitBreakerEvent.Rejected(
+                        clock.instant(), name, CircuitBreakerEvent.RejectingPhase.OPEN));
                     yield CircuitBreakerOpenException.forOpenState(
                         name, open.openedAt(), Duration.between(now, deadline));
                 }
@@ -333,6 +335,8 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 while (true) {
                     var issued = slot.permitsIssued.get();
                     if (issued >= permittedCallsInHalfOpenState) {
+                        emit(new CircuitBreakerEvent.Rejected(
+                            clock.instant(), name, CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
                         yield CircuitBreakerOpenException.forHalfOpenState(name);
                     }
                     if (slot.permitsIssued.compareAndSet(issued, issued + 1)) {
