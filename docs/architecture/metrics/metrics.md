@@ -86,11 +86,11 @@ legacy constraint forcing a different shape — revisit if this proves a real pr
 
 ```java
 public sealed interface Snapshot permits
-        CircuitBreakerSnapshot, BulkheadSnapshot, RateLimiterSnapshot {}
+    CircuitBreakerSnapshot, BulkheadSnapshot, RateLimiterSnapshot {}
 
 public sealed interface Counters permits
-        RetryCounters, TimeoutCounters, CircuitBreakerCounters, BulkheadCounters,
-        RateLimiterCounters, PolicyCounters {}
+    RetryCounters, TimeoutCounters, CircuitBreakerCounters, BulkheadCounters,
+    RateLimiterCounters, PolicyCounters {}
 ```
 
 `Snapshot` only has three permitted implementations — Retry and Timeout have no live,
@@ -117,9 +117,29 @@ public sealed interface CircuitBreakerSnapshot extends Snapshot {
 // circuitbreaker/CircuitBreakerCounters.java
 public sealed interface CircuitBreakerCounters extends Counters {
     record Transition(String name, CircuitBreakerSnapshot.Phase to,
-                       CircuitBreakerEvent.Reason reason) implements CircuitBreakerCounters {}
+                      CircuitBreakerEvent.Reason reason) implements CircuitBreakerCounters {}
+
+    /**
+     * Emitted alongside a Transition(to=CLOSED): every Closed transition originates from
+     * HalfOpen in the current state machine, and successfulTestCalls only has meaning for that
+     * specific case. Kept as its own variant rather than a field on Transition, whose fields are
+     * meaningful for every (to, reason) pair it represents — folding a HalfOpen-only value into
+     * it would mean constructing Transition from partial information depending on which
+     * transition fired, which no variant in this module does (see above).
+     */
+    record ClosedFromHalfOpen(String name, int successfulTestCalls) implements CircuitBreakerCounters {}
+
     record CallRecorded(String name, boolean successful, Duration elapsed)
-            implements CircuitBreakerCounters {}
+        implements CircuitBreakerCounters {}
+
+    /**
+     * A call rejected without executing, because the circuit was Open or HalfOpen with no
+     * permits left. Reuses CircuitBreakerEvent.RejectingPhase directly — the enum the source
+     * event carries — rather than a metrics-local duplicate, the same convention Transition
+     * already follows by reusing CircuitBreakerEvent.Reason as-is.
+     */
+    record Rejected(String name, CircuitBreakerEvent.RejectingPhase phase)
+        implements CircuitBreakerCounters {}
 }
 ```
 
@@ -157,11 +177,25 @@ public sealed interface RateLimiterCounters extends Counters {
 ```java
 // retry/RetryCounters.java
 public sealed interface RetryCounters extends Counters {
-    enum Outcome { FAILED, SUCCESS }
-    record Attempt(String name, Outcome outcome, String cause) implements RetryCounters {}
+    /**
+     * One failed attempt, sourced from RetryEvent.AttemptFailed, which fires once per failed
+     * attempt within a call.
+     */
+    record AttemptFailed(String name, String cause) implements RetryCounters {}
+
+    /**
+     * The call succeeded — sourced from RetryEvent.Success, emitted exactly once per call, when
+     * the retry loop as a whole succeeds. Distinct from AttemptFailed rather than a shared
+     * Outcome enum on one record: the two represent different units — one call vs. one attempt —
+     * and Success has no per-attempt equivalent to pair with. totalAttempts is carried on the
+     * record for backends that want to build a distribution of attempts-per-call; the default
+     * listener does not tag by it (see "Cardinality / tagging contract").
+     */
+    record Success(String name, int totalAttempts) implements RetryCounters {}
+
     record Exhausted(String name, String cause) implements RetryCounters {}
     record Rejected(String name, String cause) implements RetryCounters {}
-    record Interrupted(String name) implements RetryCounters {}
+    record Interrupted(String name, String cause) implements RetryCounters {}
 }
 ```
 
@@ -220,9 +254,8 @@ intentional way to ignore events this listener doesn't understand.
 
 ### One event can feed more than one metric
 
-A single event may drive both a `Counters` emission and a `Snapshot` emission in the same
-`onEvent()` call, when the event already carries the data for both. Concrete example —
-`CircuitBreakerEvent.CallRecorded(name, isSuccessful, elapsedTime, currentFailureRate)`:
+A single event may drive more than one `record(...)` call in the same `onEvent()` invocation, when
+the event already carries the data for both. Concrete example — `CircuitBreakerEvent`:
 
 ```java
 private void handleCircuitBreaker(CircuitBreakerEvent event) {
@@ -233,16 +266,24 @@ private void handleCircuitBreaker(CircuitBreakerEvent event) {
         }
         case CircuitBreakerEvent.Opened e ->
             safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.OPEN, e.reason()));
-        // ...
+        case CircuitBreakerEvent.HalfOpened e ->
+            safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.HALF_OPEN, null));
+        case CircuitBreakerEvent.Closed e -> {
+            safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.CLOSED, null));
+            safeRecord(new CircuitBreakerCounters.ClosedFromHalfOpen(e.name(), e.numberOfSuccessfulTestCalls()));
+        }
+        case CircuitBreakerEvent.Rejected e ->
+            safeRecord(new CircuitBreakerCounters.Rejected(e.name(), e.phase()));
     }
 }
 ```
 
-**Rejected alternative — strict 1:1 mapping** (each event feeds exactly one metric type;
-a gauge update would require its own dedicated event). Rejected because it directly contradicts
-"mirror, never recompute" below — if `CallRecorded` already carries `currentFailureRate`, forcing
-the gauge update to wait for a separate event means either inventing a new event type purely to
-satisfy an arbitrary rule, or not using data that's already on the event. Neither is justified.
+**Rejected alternative — strict 1:1 mapping** (each event feeds exactly one metric type; a gauge
+update would require its own dedicated event). Rejected because it directly contradicts "mirror,
+never recompute" below — if an event already carries the data for a second metric (e.g.
+`CallRecorded`'s `currentFailureRate`, `Closed`'s `numberOfSuccessfulTestCalls`), forcing a second
+metric to wait for a separate event means either inventing a new event type purely to satisfy an
+arbitrary rule, or not using data that's already there. Neither is justified.
 
 ### Execution model — synchronous, on the calling thread
 
@@ -300,10 +341,9 @@ On a caught exception: log at **WARN**, via SLF4J, with **no throttling or rate-
 
 ## Policy validation warnings
 
-`compose/Policy.java` currently only logs ordering diagnostics via `log.warn(...)` at
-construction time (see `policy.md`'s "Order validation" section) — nothing is retained on the
-instance, and there was previously no way to observe them as data. To make this observable by
-`ResilienceMetricsListener`, `Policy` gains:
+`compose/Policy.java` only logs ordering diagnostics via `log.warn(...)` at construction time (see
+`policy.md`'s "Order validation" section) — nothing is retained on the instance by default. To make
+this observable by `ResilienceMetricsListener`, `Policy` carries:
 
 - A `List<ResilienceEvent.Listener>` field, propagated through `.and(...)` the same way `patterns`
   is already propagated.
@@ -311,8 +351,8 @@ instance, and there was previously no way to observe them as data. To make this 
   own `withListener(...)`.
 - `PolicyValidationWarning(Instant timestamp, PatternKind outer, PatternKind inner, String problem,
   String suggestedFix) implements ResilienceEvent` (`patternName()` returns `"policy"`), emitted to
-  the currently-registered listeners **in addition to**, not instead of, the existing SLF4J `WARN`
-  log, whenever a WARN-severity `OrderingRule` fires and isn't suppressed.
+  the currently-registered listeners **in addition to**, not instead of, the SLF4J `WARN` log,
+  whenever a WARN-severity `OrderingRule` fires and isn't suppressed.
 
 **`InvalidPolicyException` (ERROR-severity rules) can never produce this event.** Construction
 fails before a `Policy` instance exists to attach a listener to — there is nothing to emit to.
@@ -327,6 +367,11 @@ so any warning it triggers internally is never observed as an event — only via
 which is unaffected and always fires. This is the same category of best-effort observability
 already accepted elsewhere in this project (see `timeout.md`'s `AbandonedWorkerSucceeded`/
 `AbandonedWorkerFailed`, "best-effort and may be missed").
+
+`listeners` is copied via `List.copyOf(...)` at construction — immutable, so no shared-mutable-list
+hazard across `Policy` instances derived from a common `.and()` chain. The SLF4J log and the
+`PolicyValidationWarning` emission always fire from the same branch, never one without the other.
+`outer`/`inner` are resolved as `PatternKind`, never as the concrete pattern instance.
 
 ---
 
@@ -355,24 +400,33 @@ Canonical name each backend should map the corresponding `Snapshot`/`Counters` v
 
 | Pattern | Record variant | Metric name | Type | Notes |
 |---|---|---|---|---|
-| Retry | `RetryCounters.Attempt(outcome=FAILED)` | `resilience.retry.attempts` | counter | tag: `outcome`, opt-in `cause` |
-| Retry | `RetryCounters.Attempt(outcome=SUCCESS)` | `resilience.retry.attempts` | counter | tag: `outcome` |
+| Retry | `RetryCounters.AttemptFailed` | `resilience.retry.attempts` | counter | opt-in `cause`; per-attempt, failed attempts only |
+| Retry | `RetryCounters.Success` | `resilience.retry.success` | counter | per-call, not per-attempt; `totalAttempts` carried but not tagged by default |
 | Retry | `RetryCounters.Exhausted` | `resilience.retry.exhausted` | counter | opt-in `cause` |
 | Retry | `RetryCounters.Rejected` | `resilience.retry.rejected` | counter | opt-in `cause` |
-| Retry | `RetryCounters.Interrupted` | `resilience.retry.interrupted` | counter | — |
+| Retry | `RetryCounters.Interrupted` | `resilience.retry.interrupted` | counter | opt-in `cause` |
 | Timeout | `TimeoutCounters.Succeeded` | `resilience.timeout.duration` | timer | `elapsed` |
 | Timeout | `TimeoutCounters.Failed` | `resilience.timeout.failed` | counter | opt-in `cause` |
 | Timeout | `TimeoutCounters.TimedOut` | `resilience.timeout.timed_out` | counter | — |
 | Timeout | `TimeoutCounters.Abandoned` | `resilience.timeout.abandoned` | counter | tag: `outcome` |
 | CircuitBreaker | `CircuitBreakerSnapshot.State` | `resilience.circuitbreaker.state` | gauge | `phase` as 0/1/2 |
 | CircuitBreaker | `CircuitBreakerCounters.Transition` | `resilience.circuitbreaker.transitions` | counter | tags: `to`, `reason` (null on Closed/HalfOpened) |
+| CircuitBreaker | `CircuitBreakerCounters.ClosedFromHalfOpen` | `resilience.circuitbreaker.closed_test_calls` | counter/summary | `successfulTestCalls`; emitted alongside `Transition(to=CLOSED)` |
 | CircuitBreaker | `CircuitBreakerSnapshot.FailureRate` | `resilience.circuitbreaker.failure_rate` | gauge | — |
 | CircuitBreaker | `CircuitBreakerCounters.CallRecorded` | `resilience.circuitbreaker.calls` | timer | tag: `successful` |
+| CircuitBreaker | `CircuitBreakerCounters.Rejected` | `resilience.circuitbreaker.rejected` | counter | tag: `phase` |
 | Bulkhead | `BulkheadSnapshot.ActiveCalls` | `resilience.bulkhead.active_calls` | gauge | emitted from `Permitted` and `Finished` |
 | Bulkhead | `BulkheadCounters.Call` | `resilience.bulkhead.calls` | counter | tag: `outcome` |
 | RateLimiter | `RateLimiterSnapshot.RemainingPermits` | `resilience.ratelimiter.remaining_permits` | gauge | — |
 | RateLimiter | `RateLimiterCounters.Call` | `resilience.ratelimiter.calls` | counter | tag: `outcome` |
 | Policy | `PolicyCounters.ValidationWarning` | `resilience.policy.validation_warnings` | counter | tags: `outer`, `inner` |
+
+**A note on `resilience.retry.attempts` vs `resilience.retry.success`:** the two metrics count
+different units — `attempts` counts individual failed attempts (many possible per call), `success`
+counts calls (exactly one per successful call). They are not directly comparable as a ratio
+without accounting for that difference; a consumer wanting "success rate per attempt" needs
+`totalAttempts` from `Success` records aggregated against the attempt counts, not a naive
+`success / (success + attempts)` division.
 
 ---
 
@@ -406,7 +460,9 @@ pattern already computed and chose to put on the event.
 
 Concretely: `currentFailureRate` arrives already computed on `CallRecorded` → the gauge is a pure
 mirror of that value, nothing derived, no averaging or recalculation across events.
-`remainingPermits` on `RateLimiter`'s `Permitted` → same treatment.
+`remainingPermits` on `RateLimiter`'s `Permitted` → same treatment. `numberOfSuccessfulTestCalls`
+on `Closed` follows the same rule — mirrored as-is into `ClosedFromHalfOpen`, never recomputed by
+counting `HalfOpened`→`CallRecorded` events across time inside the listener.
 
 If a consumer wants a *different* time window than the pattern's own — "failure rate over the last
 5 minutes" instead of the CircuitBreaker's own N-call window — that's ordinary Micrometer/OTel
@@ -429,7 +485,9 @@ relying on consumer discipline.
 discipline — Design Principle #3 in `ARCHITECTURE.md` already mandates patterns be constructed
 once and reused, not per-request, so the set of distinct `name` values is bounded by how many
 pattern instances exist, not by request volume); `outcome`/`to`/`from` (fixed 2-3 value enums);
-`reason` (`CircuitBreakerEvent.Reason`, closed enum, 2 values today).
+`reason` (`CircuitBreakerEvent.Reason`, closed enum, 2 values today); `phase`
+(`CircuitBreakerEvent.RejectingPhase`, closed enum, 2 values — `OPEN`/`HALF_OPEN` — same tier as
+`reason` for the same reason: fixed, small, closed).
 
 **Tier 2 — bounded in practice, not by the type system; opt-in, not default-on:** the failure
 `cause` field — `Throwable.getClass().getSimpleName()` only, never `getMessage()`. A given call
@@ -463,9 +521,8 @@ not left as an implication derived from the tiers above.
 No dedup guard anywhere — neither in `core`'s listener registration nor in
 `resiliencia-metrics`. Documented as a usage contract instead.
 
-Confirmed from source: all five `withListener()` implementations (`Retry`, `Timeout`,
-`CircuitBreaker`, `Bulkhead`, `RateLimiter`) share the identical shape — a plain, append-only
-`List`, no `equals()`-based check:
+All `withListener()` implementations across `patterns` and `Policy` share the identical shape — a
+plain, append-only `List`, no `equals()`-based check:
 
 ```java
 public Bulkhead<T> withListener(ResilienceEvent.Listener listener) {
@@ -672,6 +729,33 @@ July 2026):
 **Confidence:** high for all bullets above — each is a direct read of the exact source file at the
 exact pinned tag (`v1.17.0` / `v1.63.0`), not inference from general recollection or a different
 version.
+
+### `resiliencia-opentelemetry` instrumentation modes (forward-looking — module not yet implemented)
+
+Because of the OTel histogram asymmetry above — unlike Micrometer's percentile histograms, there is
+no "don't opt in" lever available to resiliencia's own code — `resiliencia-opentelemetry` will
+expose two named, sealed instrumentation modes for duration metrics (`resilience.timeout.duration`,
+`resilience.circuitbreaker.calls` in the mapping table above), not a single fixed mapping:
+
+- **`SAFE` (default).** Duration recorded as a lock-free counter pair — a count and a summed
+  duration, both confirmed lock-free above (`LongSumAggregator`/`DoubleSumAggregator`). Mean is
+  derivable (`sum / count`) by the backend at query time; no percentile/distribution data; zero
+  per-call pinning risk by construction.
+- **`DETAILED` (explicit opt-in).** Duration recorded via `DoubleHistogram.record(...)`, yielding
+  full percentile/distribution data, with the documented per-call `synchronized` pinning risk from
+  the "Verified findings" above — same warning treatment already given to Micrometer's
+  percentile-histogram opt-in.
+
+**Sealed enumeration, not a consumer-supplied strategy.** A pluggable
+`Function`/strategy-object mapping was considered and rejected for the same reason the cause-tagging
+allowlist (see "Cardinality / tagging contract") rejects a `Function<Throwable, String>` mapper:
+resiliencia doesn't delegate safety-by-default to consumer discipline. A closed, named set of two
+modes keeps the safe default enforced by the API shape itself.
+
+**Status:** recorded here so the decision isn't lost before the module exists; no implementation
+impact today, and no change to the `ResilienceMetrics` contract, the `Snapshot`/`Counters` sealed
+shapes, or anything else already specified above — scoped entirely to the not-yet-built
+`resiliencia-opentelemetry` backend.
 
 ---
 
