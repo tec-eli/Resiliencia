@@ -79,6 +79,14 @@ class ResilienciaAssertionsTest {
     }
 
     @Test
+    void should_fail_when_failureAssertedOnSuccess() {
+        Outcome<String> outcome = new Outcome.Success<>("done");
+        var outcomeAssert = assertThat(outcome);
+
+        assertThrows(AssertionError.class, outcomeAssert::isFailure);
+    }
+
+    @Test
     void should_fail_when_timedOutAssertedOnSuccess() {
         Outcome<String> outcome = new Outcome.Success<>("done");
         var outcomeAssert = assertThat(outcome);
