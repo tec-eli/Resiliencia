@@ -2,7 +2,7 @@ package io.github.teceli.resiliencia.micrometer;
 
 /**
  * Canonical {@code resilience.<pattern>.<metric>} names, one per {@code Snapshot}/{@code Counters}
- * variant, as specified in the mapping table of {@code docs/architecture/metrics/metrics.md}.
+ * variant.
  */
 final class MetricNames {
 
