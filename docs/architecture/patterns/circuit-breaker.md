@@ -134,6 +134,9 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 - **Closed** — circuit transitioned to Closed. Carries: name, number of successful test calls.
 - **HalfOpened** — circuit transitioned to HalfOpen. Carries: name.
 - **CallRecorded** — a call outcome was recorded. Carries: name, success/failure, elapsed time, current failure rate.
+- **Rejected** — a call was rejected without executing, because the circuit was Open or HalfOpen with no test-call
+  permits left. Carries: name, phase (`OPEN` or `HALF_OPEN`). Not emitted for a call that proceeds to a HalfOpen test
+  call after the wait duration elapses.
 
 ---
 
