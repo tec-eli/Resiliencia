@@ -21,6 +21,18 @@ class FakeResilientTest {
     }
 
     @Test
+    void should_returnSuccessOutcome_when_operationSucceeds() {
+        var fake = FakeResilient.<String>passthrough();
+
+        var outcome = fake.outcome(() -> "done");
+
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.Success.class, s ->
+                        assertThat(s.value()).isEqualTo("done"));
+        assertThat(fake.callCount()).isEqualTo(1);
+    }
+
+    @Test
     void should_returnFailureOutcome_when_operationThrows() {
         var fake = FakeResilient.<String>passthrough();
         var boom = new IllegalStateException("boom");

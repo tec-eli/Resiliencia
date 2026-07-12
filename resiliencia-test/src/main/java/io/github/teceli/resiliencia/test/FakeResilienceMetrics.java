@@ -3,10 +3,8 @@ package io.github.teceli.resiliencia.test;
 import io.github.teceli.resiliencia.metrics.Counters;
 import io.github.teceli.resiliencia.metrics.ResilienceMetrics;
 import io.github.teceli.resiliencia.metrics.Snapshot;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 
 /**
  * Fake implementation of {@link ResilienceMetrics} for testing code that consumes metrics.
@@ -20,18 +18,10 @@ import java.util.stream.Collectors;
  * virtual threads or platform threads simultaneously, including concurrent calls to
  * {@code record(...)} and getter methods.
  * </p>
- *
- * @since 1.0
  */
 public final class FakeResilienceMetrics implements ResilienceMetrics {
     private final CopyOnWriteArrayList<Snapshot> snapshots = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Counters> counters = new CopyOnWriteArrayList<>();
-
-    /**
-     * Creates a new fake metrics instance with empty capture lists.
-     */
-    public FakeResilienceMetrics() {
-    }
 
     @Override
     public void observe(Snapshot snapshot) {
@@ -49,7 +39,7 @@ public final class FakeResilienceMetrics implements ResilienceMetrics {
      * @return an immutable list, never null
      */
     public List<Snapshot> getAllSnapshots() {
-        return Collections.unmodifiableList(List.copyOf(snapshots));
+        return List.copyOf(snapshots);
     }
 
     /**
@@ -58,7 +48,7 @@ public final class FakeResilienceMetrics implements ResilienceMetrics {
      * @return an immutable list, never null
      */
     public List<Counters> getAllCounters() {
-        return Collections.unmodifiableList(List.copyOf(counters));
+        return List.copyOf(counters);
     }
 
     /**
@@ -76,7 +66,7 @@ public final class FakeResilienceMetrics implements ResilienceMetrics {
         return snapshots.stream()
             .filter(type::isInstance)
             .map(type::cast)
-            .collect(Collectors.toUnmodifiableList());
+            .toList();
     }
 
     /**
@@ -94,7 +84,7 @@ public final class FakeResilienceMetrics implements ResilienceMetrics {
         return counters.stream()
             .filter(type::isInstance)
             .map(type::cast)
-            .collect(Collectors.toUnmodifiableList());
+            .toList();
     }
 
     /**
