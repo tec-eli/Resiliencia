@@ -20,6 +20,18 @@
         </dependency>
 
         <dependency>
+            <groupId>io.github.teceli</groupId>
+            <artifactId>resiliencia-patterns</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.teceli</groupId>
+            <artifactId>resiliencia-compose</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
