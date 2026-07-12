@@ -14,6 +14,8 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- jcstress harness classes are annotation-processor-generated, not hand-written unit tests. -->
+        <jacoco.skip>true</jacoco.skip>
     </properties>
 
     <dependencies>
