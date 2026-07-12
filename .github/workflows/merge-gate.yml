@@ -48,13 +48,17 @@ jobs:
     steps:
       - name: Resolve PR number
         id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER_INPUT: ${{ inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "number=$PR_NUMBER_INPUT" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           number=$(gh pr list --repo "${{ github.repository }}" --state open \
-            --json number,headRefOid --jq '.[] | select(.headRefOid=="${{ github.event.workflow_run.head_sha }}") | .number' \
+            --json number,headRefOid --jq --arg sha "$HEAD_SHA" '.[] | select(.headRefOid==$sha) | .number' \
             | head -n1)
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
