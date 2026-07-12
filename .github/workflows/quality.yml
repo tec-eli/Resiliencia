@@ -47,5 +47,8 @@ jobs:
           !resiliencia-spring,!resiliencia-quarkus,!resiliencia-micronaut,!resiliencia-stress'
           org.apache.maven.plugins:maven-pmd-plugin:check
 
+      - name: Run Tests with Coverage
+        run: mvn -B clean test
+
       - name: SonarCloud Scan
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=tec-eli_resiliencia -Dsonar.organization=tec-eli
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=tec-eli_Resiliencia -Dsonar.organization=tec-eli
