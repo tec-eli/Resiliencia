@@ -11,6 +11,9 @@ Depends on `resiliencia-core`.
   pattern behavior (deadlines, windows, backoff) without real sleeps.
 - Fakes/stubs for `Resilient<T>` and related contracts, letting consumers isolate their own code from real
   pattern behavior in unit tests.
+- `CapturingListener` — a thread-safe `ResilienceEvent.Listener` that records every event it receives, in
+  arrival order, for assertion in tests (e.g. verifying `.withListener(...)` / `Policy.withListener(...)`
+  emits the expected events).
 - Assertion helpers for common scenarios (e.g. asserting an operation was retried N times), where useful
   and genuinely reusable.
 
