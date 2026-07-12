@@ -23,6 +23,11 @@
             <artifactId>resiliencia-patterns</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.teceli</groupId>
+            <artifactId>resiliencia-metrics</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- JUnit 5 is compile scope: this module ships test helpers built on JUnit -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
