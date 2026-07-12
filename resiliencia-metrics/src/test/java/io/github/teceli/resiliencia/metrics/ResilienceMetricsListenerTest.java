@@ -168,26 +168,32 @@ class ResilienceMetricsListenerTest {
         }
 
         @Test
-        void should_recordTransitionToOpen_when_openedEventEmitted() {
+        void should_recordTransitionToOpenAndState_when_openedEventEmitted() {
             var event = new CircuitBreakerEvent.Opened(Instant.now(), "myCB",
                 CircuitBreakerEvent.Reason.FAILURE_RATE_EXCEEDED);
 
             listener.onEvent(event);
 
-            verify(metrics, times(1)).observe(any(CircuitBreakerCounters.Transition.class));
+            var order = inOrder(metrics);
+            order.verify(metrics).observe(any(CircuitBreakerCounters.Transition.class));
+            order.verify(metrics).observe(any(CircuitBreakerSnapshot.State.class));
+            order.verifyNoMoreInteractions();
         }
 
         @Test
-        void should_recordTransitionToHalfOpen_when_halfOpenedEventEmitted() {
+        void should_recordTransitionToHalfOpenAndState_when_halfOpenedEventEmitted() {
             var event = new CircuitBreakerEvent.HalfOpened(Instant.now(), "myCB");
 
             listener.onEvent(event);
 
-            verify(metrics, times(1)).observe(any(CircuitBreakerCounters.Transition.class));
+            var order = inOrder(metrics);
+            order.verify(metrics).observe(any(CircuitBreakerCounters.Transition.class));
+            order.verify(metrics).observe(any(CircuitBreakerSnapshot.State.class));
+            order.verifyNoMoreInteractions();
         }
 
         @Test
-        void should_recordTransitionToClosedAndClosedFromHalfOpen_when_closedEventEmitted() {
+        void should_recordTransitionToClosedAndClosedFromHalfOpenAndState_when_closedEventEmitted() {
             var event = new CircuitBreakerEvent.Closed(Instant.now(), "myCB", 5);
 
             listener.onEvent(event);
@@ -195,6 +201,7 @@ class ResilienceMetricsListenerTest {
             var order = inOrder(metrics);
             order.verify(metrics).observe(any(CircuitBreakerCounters.Transition.class));
             order.verify(metrics).observe(any(CircuitBreakerCounters.ClosedFromHalfOpen.class));
+            order.verify(metrics).observe(any(CircuitBreakerSnapshot.State.class));
             order.verifyNoMoreInteractions();
         }
 

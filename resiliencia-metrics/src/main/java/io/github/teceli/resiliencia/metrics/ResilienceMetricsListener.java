@@ -28,7 +28,7 @@ import java.util.Set;
  * <p>
  * Each event is switched exhaustively; unknown events (custom pattern implementations) are
  * silently ignored via the default branch. Exception isolation is strict: if a
- * {@link ResilienceMetrics#record(Snapshot)} or {@link ResilienceMetrics#record(Counters)}
+ * {@link ResilienceMetrics#observe(Snapshot)} or {@link ResilienceMetrics#observe(Counters)}
  * call throws, the exception is caught, logged at WARN, and processing continues. This ensures
  * that a broken metrics backend never breaks the protected call itself.
  * </p>
@@ -54,7 +54,7 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
     public ResilienceMetricsListener(ResilienceMetrics metrics,
                                       Set<Class<? extends Throwable>> causeAllowlist) {
         this.metrics = metrics;
-        this.causeAllowlist = causeAllowlist;
+        this.causeAllowlist = Set.copyOf(causeAllowlist);
     }
 
     @Override
@@ -73,31 +73,31 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
     private void handleRetry(RetryEvent event) {
         switch (event) {
             case RetryEvent.AttemptFailed e ->
-                safeRecord(new RetryCounters.AttemptFailed(e.name(), resolveCause(e.error())));
+                safeObserve(new RetryCounters.AttemptFailed(e.name(), resolveCause(e.error())));
             case RetryEvent.Success e ->
-                safeRecord(new RetryCounters.Success(e.name(), e.totalAttempts()));
+                safeObserve(new RetryCounters.Success(e.name(), e.totalAttempts()));
             case RetryEvent.Exhausted e ->
-                safeRecord(new RetryCounters.Exhausted(e.name(), resolveCause(e.lastError())));
+                safeObserve(new RetryCounters.Exhausted(e.name(), resolveCause(e.lastError())));
             case RetryEvent.Rejected e ->
-                safeRecord(new RetryCounters.Rejected(e.name(), resolveCause(e.error())));
+                safeObserve(new RetryCounters.Rejected(e.name(), resolveCause(e.error())));
             case RetryEvent.Interrupted e ->
-                safeRecord(new RetryCounters.Interrupted(e.name(), resolveCause(e.lastError())));
+                safeObserve(new RetryCounters.Interrupted(e.name(), resolveCause(e.lastError())));
         }
     }
 
     private void handleTimeout(TimeoutEvent event) {
         switch (event) {
             case TimeoutEvent.Succeeded e ->
-                safeRecord(new TimeoutCounters.Succeeded(e.name(), e.elapsed()));
+                safeObserve(new TimeoutCounters.Succeeded(e.name(), e.elapsed()));
             case TimeoutEvent.Failed e ->
-                safeRecord(new TimeoutCounters.Failed(e.name(), resolveCause(e.error())));
+                safeObserve(new TimeoutCounters.Failed(e.name(), resolveCause(e.error())));
             case TimeoutEvent.TimedOut e ->
-                safeRecord(new TimeoutCounters.TimedOut(e.name()));
+                safeObserve(new TimeoutCounters.TimedOut(e.name()));
             case TimeoutEvent.AbandonedWorkerSucceeded e ->
-                safeRecord(new TimeoutCounters.Abandoned(e.name(),
+                safeObserve(new TimeoutCounters.Abandoned(e.name(),
                     TimeoutCounters.AbandonedOutcome.SUCCEEDED));
             case TimeoutEvent.AbandonedWorkerFailed e ->
-                safeRecord(new TimeoutCounters.Abandoned(e.name(),
+                safeObserve(new TimeoutCounters.Abandoned(e.name(),
                     TimeoutCounters.AbandonedOutcome.FAILED));
         }
     }
@@ -105,56 +105,61 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
     private void handleCircuitBreaker(CircuitBreakerEvent event) {
         switch (event) {
             case CircuitBreakerEvent.CallRecorded e -> {
-                safeRecord(new CircuitBreakerCounters.CallRecorded(e.name(), e.isSuccessful(),
+                safeObserve(new CircuitBreakerCounters.CallRecorded(e.name(), e.isSuccessful(),
                     e.elapsedTime()));
-                safeRecord(new CircuitBreakerSnapshot.FailureRate(e.name(), e.currentFailureRate()));
+                safeObserve(new CircuitBreakerSnapshot.FailureRate(e.name(), e.currentFailureRate()));
             }
-            case CircuitBreakerEvent.Opened e ->
-                safeRecord(new CircuitBreakerCounters.Transition(e.name(),
+            case CircuitBreakerEvent.Opened e -> {
+                safeObserve(new CircuitBreakerCounters.Transition(e.name(),
                     CircuitBreakerSnapshot.Phase.OPEN, e.reason()));
-            case CircuitBreakerEvent.HalfOpened e ->
-                safeRecord(new CircuitBreakerCounters.Transition(e.name(),
+                safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.OPEN));
+            }
+            case CircuitBreakerEvent.HalfOpened e -> {
+                safeObserve(new CircuitBreakerCounters.Transition(e.name(),
                     CircuitBreakerSnapshot.Phase.HALF_OPEN, null));
+                safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.HALF_OPEN));
+            }
             case CircuitBreakerEvent.Closed e -> {
-                safeRecord(new CircuitBreakerCounters.Transition(e.name(),
+                safeObserve(new CircuitBreakerCounters.Transition(e.name(),
                     CircuitBreakerSnapshot.Phase.CLOSED, null));
-                safeRecord(new CircuitBreakerCounters.ClosedFromHalfOpen(e.name(),
+                safeObserve(new CircuitBreakerCounters.ClosedFromHalfOpen(e.name(),
                     e.numberOfSuccessfulTestCalls()));
+                safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.CLOSED));
             }
             case CircuitBreakerEvent.Rejected e ->
-                safeRecord(new CircuitBreakerCounters.Rejected(e.name(), e.phase()));
+                safeObserve(new CircuitBreakerCounters.Rejected(e.name(), e.phase()));
         }
     }
 
     private void handleBulkhead(BulkheadEvent event) {
         switch (event) {
             case BulkheadEvent.Permitted e -> {
-                safeRecord(new BulkheadCounters.Call(e.name(), BulkheadCounters.Outcome.PERMITTED));
-                safeRecord(new BulkheadSnapshot.ActiveCalls(e.name(), e.activeCalls()));
+                safeObserve(new BulkheadCounters.Call(e.name(), BulkheadCounters.Outcome.PERMITTED));
+                safeObserve(new BulkheadSnapshot.ActiveCalls(e.name(), e.activeCalls()));
             }
             case BulkheadEvent.Rejected e ->
-                safeRecord(new BulkheadCounters.Call(e.name(), BulkheadCounters.Outcome.REJECTED));
+                safeObserve(new BulkheadCounters.Call(e.name(), BulkheadCounters.Outcome.REJECTED));
             case BulkheadEvent.Finished e ->
-                safeRecord(new BulkheadSnapshot.ActiveCalls(e.name(), e.activeCalls()));
+                safeObserve(new BulkheadSnapshot.ActiveCalls(e.name(), e.activeCalls()));
         }
     }
 
     private void handleRateLimiter(RateLimiterEvent event) {
         switch (event) {
             case RateLimiterEvent.Permitted e -> {
-                safeRecord(new RateLimiterCounters.Call(e.name(),
+                safeObserve(new RateLimiterCounters.Call(e.name(),
                     RateLimiterCounters.Outcome.PERMITTED));
-                safeRecord(new RateLimiterSnapshot.RemainingPermits(e.name(),
+                safeObserve(new RateLimiterSnapshot.RemainingPermits(e.name(),
                     e.remainingPermits()));
             }
             case RateLimiterEvent.Rejected e ->
-                safeRecord(new RateLimiterCounters.Call(e.name(),
+                safeObserve(new RateLimiterCounters.Call(e.name(),
                     RateLimiterCounters.Outcome.REJECTED));
         }
     }
 
     private void handlePolicy(PolicyValidationWarning event) {
-        safeRecord(new PolicyCounters.ValidationWarning(event.outer(), event.inner()));
+        safeObserve(new PolicyCounters.ValidationWarning(event.outer(), event.inner()));
     }
 
     /**
@@ -175,11 +180,11 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
     }
 
     /**
-     * Wraps each {@code record} call in its own try/catch so that if one backend call fails,
+     * Wraps each {@code observe} call in its own try/catch so that if one backend call fails,
      * the next one still executes. This is critical when a single event drives multiple
-     * {@code record(...)} calls (e.g., CallRecorded emits both a counter and a snapshot).
+     * {@code observe(...)} calls (e.g., CallRecorded emits both a counter and a snapshot).
      */
-    private void safeRecord(Snapshot snapshot) {
+    private void safeObserve(Snapshot snapshot) {
         try {
             metrics.observe(snapshot);
         } catch (Exception e) {
@@ -188,11 +193,11 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
     }
 
     /**
-     * Wraps each {@code record} call in its own try/catch so that if one backend call fails,
+     * Wraps each {@code observe} call in its own try/catch so that if one backend call fails,
      * the next one still executes. This is critical when a single event drives multiple
-     * {@code record(...)} calls (e.g., CallRecorded emits both a counter and a snapshot).
+     * {@code observe(...)} calls (e.g., CallRecorded emits both a counter and a snapshot).
      */
-    private void safeRecord(Counters counters) {
+    private void safeObserve(Counters counters) {
         try {
             metrics.observe(counters);
         } catch (Exception e) {

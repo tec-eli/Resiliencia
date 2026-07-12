@@ -34,14 +34,18 @@ away from where the event actually originates, purely to satisfy a dependency co
 
 ```java
 public interface ResilienceMetrics {
-    void record(Snapshot snapshot);
-    void record(Counters counters);
+    void observe(Snapshot snapshot);
+    void observe(Counters counters);
 }
 ```
 
 Two methods, not one per pattern and not a stringly-typed generic API. `Snapshot` and `Counters`
 are sealed roots (see "Sealed metric types" below); each backend implementation performs its own
-exhaustive `switch` over the sealed hierarchy inside its `record(...)` method body.
+exhaustive `switch` over the sealed hierarchy inside its `observe(...)` method body.
+
+Named `observe`, not `record` — `record` collides with the `record` keyword introduced in Java 16,
+which is confusing directly adjacent to the `Snapshot`/`Counters` sealed hierarchies that are
+themselves implemented as records.
 
 **Options considered:**
 
@@ -254,26 +258,31 @@ intentional way to ignore events this listener doesn't understand.
 
 ### One event can feed more than one metric
 
-A single event may drive more than one `record(...)` call in the same `onEvent()` invocation, when
+A single event may drive more than one `observe(...)` call in the same `onEvent()` invocation, when
 the event already carries the data for both. Concrete example — `CircuitBreakerEvent`:
 
 ```java
 private void handleCircuitBreaker(CircuitBreakerEvent event) {
     switch (event) {
         case CircuitBreakerEvent.CallRecorded e -> {
-            safeRecord(new CircuitBreakerCounters.CallRecorded(e.name(), e.isSuccessful(), e.elapsedTime()));
-            safeRecord(new CircuitBreakerSnapshot.FailureRate(e.name(), e.currentFailureRate()));
+            safeObserve(new CircuitBreakerCounters.CallRecorded(e.name(), e.isSuccessful(), e.elapsedTime()));
+            safeObserve(new CircuitBreakerSnapshot.FailureRate(e.name(), e.currentFailureRate()));
         }
-        case CircuitBreakerEvent.Opened e ->
-            safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.OPEN, e.reason()));
-        case CircuitBreakerEvent.HalfOpened e ->
-            safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.HALF_OPEN, null));
+        case CircuitBreakerEvent.Opened e -> {
+            safeObserve(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.OPEN, e.reason()));
+            safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.OPEN));
+        }
+        case CircuitBreakerEvent.HalfOpened e -> {
+            safeObserve(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.HALF_OPEN, null));
+            safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.HALF_OPEN));
+        }
         case CircuitBreakerEvent.Closed e -> {
-            safeRecord(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.CLOSED, null));
-            safeRecord(new CircuitBreakerCounters.ClosedFromHalfOpen(e.name(), e.numberOfSuccessfulTestCalls()));
+            safeObserve(new CircuitBreakerCounters.Transition(e.name(), CircuitBreakerSnapshot.Phase.CLOSED, null));
+            safeObserve(new CircuitBreakerCounters.ClosedFromHalfOpen(e.name(), e.numberOfSuccessfulTestCalls()));
+            safeObserve(new CircuitBreakerSnapshot.State(e.name(), CircuitBreakerSnapshot.Phase.CLOSED));
         }
         case CircuitBreakerEvent.Rejected e ->
-            safeRecord(new CircuitBreakerCounters.Rejected(e.name(), e.phase()));
+            safeObserve(new CircuitBreakerCounters.Rejected(e.name(), e.phase()));
     }
 }
 ```
@@ -314,8 +323,8 @@ a *backend's* concrete implementation, not resiliencia's synchronous dispatch de
 
 ### Exception isolation — the listener protects itself
 
-`onEvent()` wraps **each** delegation to `ResilienceMetrics.record(...)` in its own try/catch — not
-one try/catch around the whole method, so that when an event drives two `record(...)` calls (see
+`onEvent()` wraps **each** delegation to `ResilienceMetrics.observe(...)` in its own try/catch — not
+one try/catch around the whole method, so that when an event drives two `observe(...)` calls (see
 above), one backend failure doesn't suppress the other. This is deliberately **not** based on an
 assumption that `core` guarantees listener exception isolation generally — that guarantee isn't
 confirmed to exist, and `resiliencia-metrics` shouldn't depend on a contract it doesn't own.

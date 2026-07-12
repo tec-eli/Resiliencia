@@ -11,7 +11,7 @@ specifically so `ResilienceMetricsListener` can reference `PolicyValidationWarni
 
 ## Scope
 
-- `ResilienceMetrics`: a small backend interface (`record(Snapshot)`, `record(Counters)`) that
+- `ResilienceMetrics`: a small backend interface (`observe(Snapshot)`, `observe(Counters)`) that
   `resiliencia-micrometer`/`resiliencia-opentelemetry` implement.
 - `ResilienceMetricsListener`: translates typed events (`RetryEvent`, `TimeoutEvent`, `CircuitBreakerEvent`,
   `BulkheadEvent`, `RateLimiterEvent`, `PolicyValidationWarning`) into `Snapshot`/`Counters` emissions — no
@@ -26,6 +26,6 @@ specifically so `ResilienceMetricsListener` can reference `PolicyValidationWarni
   never a second, independently-tracked window (see `metrics.md`'s "Windowing coherence").
 - Does not implement `Policy` or pattern logic — read-only observer of events produced elsewhere.
 - Logging is minimal and internal-failure-only: `ResilienceMetricsListener` logs at WARN via SLF4J when a
-  backend's `record(...)` call throws, so a broken backend never propagates into the protected call. This
+  backend's `observe(...)` call throws, so a broken backend never propagates into the protected call. This
   supersedes an earlier, informally-assumed direction toward `System.Logger` — see `ARCHITECTURE.md`'s
   "Logging" section for why SLF4J was chosen project-wide instead.
