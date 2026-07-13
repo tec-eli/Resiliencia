@@ -128,7 +128,7 @@ class MicrometerResilienceMetricsTest {
             metrics.observe(new CircuitBreakerCounters.Transition(
                 "myCb", CircuitBreakerSnapshot.Phase.OPEN, CircuitBreakerEvent.Reason.FAILURE_RATE_EXCEEDED));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_TRANSITIONS)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_TRANSITIONS)
                 .tag("name", "myCb")
                 .tag("to", "OPEN")
                 .tag("reason", "FAILURE_RATE_EXCEEDED")
@@ -139,7 +139,7 @@ class MicrometerResilienceMetricsTest {
         void should_omitReasonTag_when_transitionToClosed() {
             metrics.observe(new CircuitBreakerCounters.Transition("myCb", CircuitBreakerSnapshot.Phase.CLOSED, null));
 
-            var counter = registry.get(MetricNames.CIRCUITBREAKER_TRANSITIONS)
+            var counter = registry.get(MetricNames.CIRCUIT_BREAKER_TRANSITIONS)
                 .tag("name", "myCb").tag("to", "CLOSED").counter();
             assertThat(counter.getId().getTags()).hasSize(2);
         }
@@ -148,7 +148,7 @@ class MicrometerResilienceMetricsTest {
         void should_incrementByTestCalls_when_closedFromHalfOpenObserved() {
             metrics.observe(new CircuitBreakerCounters.ClosedFromHalfOpen("myCb", 5));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_CLOSED_TEST_CALLS)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_CLOSED_TEST_CALLS)
                 .tag("name", "myCb").counter().count()).isEqualTo(5.0);
         }
 
@@ -156,7 +156,7 @@ class MicrometerResilienceMetricsTest {
         void should_recordTimer_when_callRecordedObserved() {
             metrics.observe(new CircuitBreakerCounters.CallRecorded("myCb", true, Duration.ofMillis(20)));
 
-            var timer = registry.get(MetricNames.CIRCUITBREAKER_CALLS)
+            var timer = registry.get(MetricNames.CIRCUIT_BREAKER_CALLS)
                 .tag("name", "myCb").tag("successful", "true").timer();
             assertThat(timer.count()).isEqualTo(1);
         }
@@ -165,7 +165,7 @@ class MicrometerResilienceMetricsTest {
         void should_tagPhase_when_rejectedObserved() {
             metrics.observe(new CircuitBreakerCounters.Rejected("myCb", CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_REJECTED)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_REJECTED)
                 .tag("name", "myCb")
                 .tag("phase", "HALF_OPEN")
                 .counter().count()).isEqualTo(1.0);
@@ -191,7 +191,7 @@ class MicrometerResilienceMetricsTest {
         void should_tagOutcome_when_callObserved() {
             metrics.observe(new RateLimiterCounters.Call("myLimiter", RateLimiterCounters.Outcome.REJECTED));
 
-            assertThat(registry.get(MetricNames.RATELIMITER_CALLS)
+            assertThat(registry.get(MetricNames.RATE_LIMITER_CALLS)
                 .tag("name", "myLimiter")
                 .tag("outcome", "REJECTED")
                 .counter().count()).isEqualTo(1.0);
@@ -217,7 +217,7 @@ class MicrometerResilienceMetricsTest {
         void should_exposePhaseAsOrdinal_when_stateObserved() {
             metrics.observe(new CircuitBreakerSnapshot.State("myCb", CircuitBreakerSnapshot.Phase.HALF_OPEN));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_STATE)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_STATE)
                 .tag("name", "myCb").gauge().value()).isEqualTo(2.0);
         }
 
@@ -226,7 +226,7 @@ class MicrometerResilienceMetricsTest {
             metrics.observe(new CircuitBreakerSnapshot.State("myCb", CircuitBreakerSnapshot.Phase.CLOSED));
             metrics.observe(new CircuitBreakerSnapshot.State("myCb", CircuitBreakerSnapshot.Phase.OPEN));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_STATE)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_STATE)
                 .tag("name", "myCb").gauge().value()).isEqualTo(1.0);
         }
 
@@ -234,7 +234,7 @@ class MicrometerResilienceMetricsTest {
         void should_mirrorFailureRate_when_failureRateObserved() {
             metrics.observe(new CircuitBreakerSnapshot.FailureRate("myCb", 0.42));
 
-            assertThat(registry.get(MetricNames.CIRCUITBREAKER_FAILURE_RATE)
+            assertThat(registry.get(MetricNames.CIRCUIT_BREAKER_FAILURE_RATE)
                 .tag("name", "myCb").gauge().value()).isEqualTo(0.42);
         }
 
@@ -250,7 +250,7 @@ class MicrometerResilienceMetricsTest {
         void should_mirrorRemainingPermits_when_remainingPermitsObserved() {
             metrics.observe(new RateLimiterSnapshot.RemainingPermits("myLimiter", 7));
 
-            assertThat(registry.get(MetricNames.RATELIMITER_REMAINING_PERMITS)
+            assertThat(registry.get(MetricNames.RATE_LIMITER_REMAINING_PERMITS)
                 .tag("name", "myLimiter").gauge().value()).isEqualTo(7.0);
         }
     }

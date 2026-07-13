@@ -1,5 +1,6 @@
 package io.github.teceli.resiliencia.micrometer;
 
+import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.metrics.Counters;
 import io.github.teceli.resiliencia.metrics.ResilienceMetrics;
 import io.github.teceli.resiliencia.metrics.Snapshot;
@@ -19,7 +20,7 @@ import io.micrometer.core.instrument.Tags;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * {@link ResilienceMetrics} backed by a Micrometer {@link MeterRegistry}.
@@ -34,7 +35,7 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     private static final String TAG_OUTCOME = "outcome";
 
     private final MeterRegistry registry;
-    private final Map<String, AtomicReference<Double>> gaugeHolders = new ConcurrentHashMap<>();
+    private final Map<String, AtomicLong> gaugeHolders = new ConcurrentHashMap<>();
 
     public MicrometerResilienceMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -44,13 +45,13 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     public void observe(Snapshot snapshot) {
         switch (snapshot) {
             case CircuitBreakerSnapshot.State(String name, CircuitBreakerSnapshot.Phase phase) ->
-                setGauge(MetricNames.CIRCUITBREAKER_STATE, name, phase.ordinal());
+                setGauge(MetricNames.CIRCUIT_BREAKER_STATE, name, phase.ordinal());
             case CircuitBreakerSnapshot.FailureRate(String name, double rate) ->
-                setGauge(MetricNames.CIRCUITBREAKER_FAILURE_RATE, name, rate);
+                setGauge(MetricNames.CIRCUIT_BREAKER_FAILURE_RATE, name, rate);
             case BulkheadSnapshot.ActiveCalls(String name, int count) ->
                 setGauge(MetricNames.BULKHEAD_ACTIVE_CALLS, name, count);
             case RateLimiterSnapshot.RemainingPermits(String name, int remaining) ->
-                setGauge(MetricNames.RATELIMITER_REMAINING_PERMITS, name, remaining);
+                setGauge(MetricNames.RATE_LIMITER_REMAINING_PERMITS, name, remaining);
         }
     }
 
@@ -103,16 +104,16 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
                 if (reason != null) {
                     tags = tags.and("reason", reason.name());
                 }
-                registry.counter(MetricNames.CIRCUITBREAKER_TRANSITIONS, tags).increment();
+                registry.counter(MetricNames.CIRCUIT_BREAKER_TRANSITIONS, tags).increment();
             }
             case CircuitBreakerCounters.ClosedFromHalfOpen(String name, int successfulTestCalls) ->
-                registry.counter(MetricNames.CIRCUITBREAKER_CLOSED_TEST_CALLS, Tags.of(TAG_NAME, name))
+                registry.counter(MetricNames.CIRCUIT_BREAKER_CLOSED_TEST_CALLS, Tags.of(TAG_NAME, name))
                     .increment(successfulTestCalls);
             case CircuitBreakerCounters.CallRecorded(String name, boolean successful, Duration elapsed) ->
-                registry.timer(MetricNames.CIRCUITBREAKER_CALLS,
+                registry.timer(MetricNames.CIRCUIT_BREAKER_CALLS,
                     Tags.of(TAG_NAME, name, "successful", String.valueOf(successful))).record(elapsed);
             case CircuitBreakerCounters.Rejected(String name, CircuitBreakerEvent.RejectingPhase phase) ->
-                increment(MetricNames.CIRCUITBREAKER_REJECTED, name, "phase", phase.name());
+                increment(MetricNames.CIRCUIT_BREAKER_REJECTED, name, "phase", phase.name());
         }
     }
 
@@ -126,13 +127,13 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     private void handleRateLimiter(RateLimiterCounters counters) {
         switch (counters) {
             case RateLimiterCounters.Call(String name, RateLimiterCounters.Outcome outcome) ->
-                increment(MetricNames.RATELIMITER_CALLS, name, TAG_OUTCOME, outcome.name());
+                increment(MetricNames.RATE_LIMITER_CALLS, name, TAG_OUTCOME, outcome.name());
         }
     }
 
     private void handlePolicy(PolicyCounters counters) {
         switch (counters) {
-            case PolicyCounters.ValidationWarning(var outer, var inner) ->
+            case PolicyCounters.ValidationWarning(PatternKind outer, PatternKind inner) ->
                 registry.counter(MetricNames.POLICY_VALIDATION_WARNINGS,
                     Tags.of("outer", outer.name(), "inner", inner.name())).increment();
         }
@@ -156,10 +157,11 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
 
     private void setGauge(String metricName, String name, double value) {
         var holder = gaugeHolders.computeIfAbsent(metricName + "|" + name, key -> {
-            var reference = new AtomicReference<>(value);
-            registry.gauge(metricName, Tags.of(TAG_NAME, name), reference, AtomicReference::get);
+            var reference = new AtomicLong(Double.doubleToLongBits(value));
+            registry.gauge(metricName, Tags.of(TAG_NAME, name), reference,
+                ref -> Double.longBitsToDouble(ref.get()));
             return reference;
         });
-        holder.set(value);
+        holder.set(Double.doubleToLongBits(value));
     }
 }
