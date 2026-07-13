@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" role="img" aria-labelledby="cb-diagram-title cb-diagram-desc">
+  <title id="cb-diagram-title">CircuitBreaker state machine</title>
+  <desc id="cb-diagram-desc">Closed transitions to Open when the failure or slow-call rate exceeds its
+    threshold. Open transitions to HalfOpen after the configured wait duration. HalfOpen transitions to Closed
+    when all permitted test calls succeed, or back to Open when any test call fails.</desc>
+  <defs>
+    <marker id="cb-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="rgba(240,240,240,0.64)"/>
+    </marker>
+    <marker id="cb-arrow-failure" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff8a8a"/>
+    </marker>
+  </defs>
+
+  <!-- Closed -> Open -->
+  <path fill="none" stroke="rgba(240,240,240,0.64)" stroke-width="1.75" marker-end="url(#cb-arrow)" d="M216,100 L604,100"/>
+  <text x="410" y="76" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="12" fill="rgba(240,240,240,0.64)">failure / slow-call rate ≥ threshold</text>
+
+  <!-- Open -> HalfOpen (outer bow, right) -->
+  <path fill="none" stroke="rgba(240,240,240,0.64)" stroke-width="1.75" marker-end="url(#cb-arrow)" d="M621.6,144.7 Q672,246 458.4,295.3"/>
+  <text x="642" y="238" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="12" fill="rgba(240,240,240,0.64)">
+    <tspan x="642" dy="0">waitDurationInOpenState</tspan>
+    <tspan x="642" dy="14">elapses</tspan>
+  </text>
+
+  <!-- HalfOpen -> Open, failure (inner bow, left, dashed red) -->
+  <path fill="none" stroke="#ff8a8a" stroke-width="1.75" stroke-dasharray="5 5" marker-end="url(#cb-arrow-failure)" d="M462.8,300.4 Q464,176 617.2,139.6"/>
+  <text x="500" y="192" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="12" fill="#ff8a8a">any test call fails</text>
+
+  <!-- HalfOpen -> Closed -->
+  <path fill="none" stroke="rgba(240,240,240,0.64)" stroke-width="1.75" marker-end="url(#cb-arrow)" d="M361.6,295.3 Q246,236 198.4,144.7"/>
+  <text x="228" y="256" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="12" fill="rgba(240,240,240,0.64)">all test calls succeed</text>
+
+  <!-- Closed -->
+  <circle cx="150" cy="100" r="66" fill="#001c40" stroke="#f0f0f0" stroke-width="2"/>
+  <text x="150" y="96" text-anchor="middle" font-family="'Comic Sans MS', cursive" font-size="22" fill="#f0f0f0">Closed</text>
+  <text x="150" y="116" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="11.5" fill="rgba(240,240,240,0.64)">all calls admitted</text>
+
+  <!-- Open -->
+  <circle cx="670" cy="100" r="66" fill="#001c40" stroke="#ff8a8a" stroke-width="2"/>
+  <text x="670" y="96" text-anchor="middle" font-family="'Comic Sans MS', cursive" font-size="22" fill="#f0f0f0">Open</text>
+  <text x="670" y="116" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="11.5" fill="rgba(240,240,240,0.64)">calls rejected</text>
+
+  <!-- HalfOpen -->
+  <circle cx="410" cy="340" r="66" fill="#001c40" stroke="#f0f0f0" stroke-width="2"/>
+  <text x="410" y="336" text-anchor="middle" font-family="'Comic Sans MS', cursive" font-size="22" fill="#f0f0f0">HalfOpen</text>
+  <text x="410" y="356" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace" font-size="11.5" fill="rgba(240,240,240,0.64)">limited test calls</text>
+</svg>

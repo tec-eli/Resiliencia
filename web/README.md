@@ -33,6 +33,8 @@ full rebuild.
 ```bash
 mkdir -p _site
 cp web/index.html _site/index.html
+cp -r web/assets _site/assets
+cp -r web/patterns _site/patterns
 cp -r target/reports/apidocs _site/apidocs
 python -m http.server 8000 --directory _site
 # -> http://localhost:8000/
