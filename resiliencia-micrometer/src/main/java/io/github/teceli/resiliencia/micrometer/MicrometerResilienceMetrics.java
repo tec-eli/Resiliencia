@@ -4,15 +4,22 @@ import io.github.teceli.resiliencia.metrics.Counters;
 import io.github.teceli.resiliencia.metrics.ResilienceMetrics;
 import io.github.teceli.resiliencia.metrics.Snapshot;
 import io.github.teceli.resiliencia.metrics.bulkhead.BulkheadCounters;
+import io.github.teceli.resiliencia.metrics.bulkhead.BulkheadSnapshot;
 import io.github.teceli.resiliencia.metrics.circuitbreaker.CircuitBreakerCounters;
+import io.github.teceli.resiliencia.metrics.circuitbreaker.CircuitBreakerSnapshot;
 import io.github.teceli.resiliencia.metrics.policy.PolicyCounters;
 import io.github.teceli.resiliencia.metrics.ratelimiter.RateLimiterCounters;
+import io.github.teceli.resiliencia.metrics.ratelimiter.RateLimiterSnapshot;
 import io.github.teceli.resiliencia.metrics.retry.RetryCounters;
 import io.github.teceli.resiliencia.metrics.timeout.TimeoutCounters;
+import io.github.teceli.resiliencia.patterns.circuitbreaker.CircuitBreakerEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * {@link ResilienceMetrics} backed by a Micrometer {@link MeterRegistry}.
@@ -27,6 +34,7 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     private static final String TAG_OUTCOME = "outcome";
 
     private final MeterRegistry registry;
+    private final Map<String, AtomicReference<Double>> gaugeHolders = new ConcurrentHashMap<>();
 
     public MicrometerResilienceMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -34,7 +42,16 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
 
     @Override
     public void observe(Snapshot snapshot) {
-        throw new UnsupportedOperationException("Gauges are implemented in a later step");
+        switch (snapshot) {
+            case CircuitBreakerSnapshot.State(String name, CircuitBreakerSnapshot.Phase phase) ->
+                setGauge(MetricNames.CIRCUITBREAKER_STATE, name, phase.ordinal());
+            case CircuitBreakerSnapshot.FailureRate(String name, double rate) ->
+                setGauge(MetricNames.CIRCUITBREAKER_FAILURE_RATE, name, rate);
+            case BulkheadSnapshot.ActiveCalls(String name, int count) ->
+                setGauge(MetricNames.BULKHEAD_ACTIVE_CALLS, name, count);
+            case RateLimiterSnapshot.RemainingPermits(String name, int remaining) ->
+                setGauge(MetricNames.RATELIMITER_REMAINING_PERMITS, name, remaining);
+        }
     }
 
     @Override
@@ -53,8 +70,8 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
         switch (counters) {
             case RetryCounters.AttemptFailed(String name, String cause) ->
                 increment(MetricNames.RETRY_ATTEMPTS, name, cause);
-            case RetryCounters.Success(String name, int totalAttempts) ->
-                increment(MetricNames.RETRY_SUCCESS, name);
+            case RetryCounters.Success c ->
+                increment(MetricNames.RETRY_SUCCESS, c.name());
             case RetryCounters.Exhausted(String name, String cause) ->
                 increment(MetricNames.RETRY_EXHAUSTED, name, cause);
             case RetryCounters.Rejected(String name, String cause) ->
@@ -78,7 +95,25 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     }
 
     private void handleCircuitBreaker(CircuitBreakerCounters counters) {
-        throw new UnsupportedOperationException("CircuitBreakerCounters are implemented in a later step");
+        switch (counters) {
+            case CircuitBreakerCounters.Transition(String name,
+                                                   CircuitBreakerSnapshot.Phase to,
+                                                   CircuitBreakerEvent.Reason reason) -> {
+                var tags = Tags.of(TAG_NAME, name, "to", to.name());
+                if (reason != null) {
+                    tags = tags.and("reason", reason.name());
+                }
+                registry.counter(MetricNames.CIRCUITBREAKER_TRANSITIONS, tags).increment();
+            }
+            case CircuitBreakerCounters.ClosedFromHalfOpen(String name, int successfulTestCalls) ->
+                registry.counter(MetricNames.CIRCUITBREAKER_CLOSED_TEST_CALLS, Tags.of(TAG_NAME, name))
+                    .increment(successfulTestCalls);
+            case CircuitBreakerCounters.CallRecorded(String name, boolean successful, Duration elapsed) ->
+                registry.timer(MetricNames.CIRCUITBREAKER_CALLS,
+                    Tags.of(TAG_NAME, name, "successful", String.valueOf(successful))).record(elapsed);
+            case CircuitBreakerCounters.Rejected(String name, CircuitBreakerEvent.RejectingPhase phase) ->
+                increment(MetricNames.CIRCUITBREAKER_REJECTED, name, "phase", phase.name());
+        }
     }
 
     private void handleBulkhead(BulkheadCounters counters) {
@@ -117,5 +152,14 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
             tags = tags.and(extraTagKey, extraTagValue);
         }
         registry.counter(metricName, tags).increment();
+    }
+
+    private void setGauge(String metricName, String name, double value) {
+        var holder = gaugeHolders.computeIfAbsent(metricName + "|" + name, key -> {
+            var reference = new AtomicReference<>(value);
+            registry.gauge(metricName, Tags.of(TAG_NAME, name), reference, AtomicReference::get);
+            return reference;
+        });
+        holder.set(value);
     }
 }
