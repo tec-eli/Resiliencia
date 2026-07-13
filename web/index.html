@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Resiliencia — resilience patterns for Java 21</title>
 <style>
   @font-face {
@@ -230,6 +235,7 @@
     border: 1.5px dashed var(--blue-line-strong); border-radius: 4px;
     padding: 1.6rem; background: var(--blue);
     display: flex; flex-direction: column; gap: .7rem;
+    color: var(--white); text-decoration: none;
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease,
                 background-color .18s ease, color .18s ease;
   }
@@ -303,7 +309,10 @@
   .bom-table td { padding: .75rem .9rem; border-bottom: 1px solid var(--blue-line); vertical-align: top; }
   .bom-table tr:last-child td { border-bottom: none; }
   .bom-table td:first-child { font-family: var(--font-mono); font-size: .87rem; white-space: nowrap; }
+  .bom-table td:first-child a { color: inherit; text-decoration: underline; text-decoration-color: var(--blue-line-strong); }
+  .bom-table td:first-child a:hover { text-decoration-color: currentColor; }
   .bom-table tr:hover td { background: var(--blue-line); }
+  .module-status { font-family: var(--font-hand); font-size: .95rem; color: var(--white-dim); white-space: normal; }
   .margin-note { margin-top: 1.1rem; font-family: var(--font-hand); font-size: 1.1rem; color: var(--white-dim); }
   .javadoc-cta { margin-top: 1.5rem; }
 
@@ -325,6 +334,8 @@
     }
   }
 </style>
+</head>
+<body>
 
 <a href="#main" class="skip-link">Skip to content</a>
 
@@ -380,16 +391,16 @@
       <p class="section-lede">Each one implements <code>Resilient</code> — <code>call()</code>, <code>callAsync()</code>, or <code>outcome()</code> if you'd rather not deal with exceptions at all.</p>
 
       <div class="patterns-grid">
-        <article class="pattern-card">
+        <a class="pattern-card" href="apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/retry/Retry.html">
           <svg class="pattern-icon" viewBox="0 0 32 32" aria-hidden="true">
             <circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 5" stroke-linecap="round"/>
             <polygon points="24,7 29,9 25,13" fill="currentColor"/>
           </svg>
           <h3>Retry</h3>
           <p>Retries a failing call with a configurable number of attempts, wait duration, and optional exponential backoff.</p>
-        </article>
+        </a>
 
-        <article class="pattern-card">
+        <a class="pattern-card" href="apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/timeout/Timeout.html">
           <svg class="pattern-icon" viewBox="0 0 32 32" aria-hidden="true">
             <circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="2"/>
             <line x1="16" y1="16" x2="16" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -397,9 +408,9 @@
           </svg>
           <h3>Timeout</h3>
           <p>Cancels a call that runs too long. Real cancellation via virtual&nbsp;thread interruption — not polling.</p>
-        </article>
+        </a>
 
-        <article class="pattern-card">
+        <a class="pattern-card" href="apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/circuitbreaker/CircuitBreaker.html">
           <svg class="pattern-icon" viewBox="0 0 32 32" aria-hidden="true">
             <circle cx="6" cy="16" r="2" fill="currentColor"/>
             <circle cx="26" cy="16" r="2" fill="currentColor"/>
@@ -409,9 +420,9 @@
           </svg>
           <h3>CircuitBreaker</h3>
           <p>Stops calling a degraded dependency. Closed, Open, HalfOpen — modeled as a sealed <code>CircuitState</code>.</p>
-        </article>
+        </a>
 
-        <article class="pattern-card">
+        <a class="pattern-card" href="apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/bulkhead/Bulkhead.html">
           <svg class="pattern-icon" viewBox="0 0 32 32" aria-hidden="true">
             <rect x="6" y="7" width="20" height="18" fill="none" stroke="currentColor" stroke-width="2"/>
             <line x1="13" y1="7" x2="13" y2="25" stroke="currentColor" stroke-width="2"/>
@@ -419,9 +430,9 @@
           </svg>
           <h3>Bulkhead</h3>
           <p>Caps concurrent calls with a semaphore. Blocking a virtual thread while it waits is cheap.</p>
-        </article>
+        </a>
 
-        <article class="pattern-card">
+        <a class="pattern-card" href="apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/ratelimiter/RateLimiter.html">
           <svg class="pattern-icon" viewBox="0 0 32 32" aria-hidden="true">
             <path d="M6 22 A 11 11 0 0 1 26 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             <line x1="16" y1="22" x2="21" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -429,7 +440,7 @@
           </svg>
           <h3>RateLimiter</h3>
           <p>Caps how often a call may run inside a configurable time window.</p>
-        </article>
+        </a>
       </div>
     </div>
   </section>
@@ -502,12 +513,13 @@ policy.call(() -&gt; api.fetchOrder(id));</code></pre>
             <tr><th>module</th><th>what's in it</th><th>external deps</th></tr>
           </thead>
           <tbody>
-            <tr><td>resiliencia-core</td><td>Resilient, Outcome&lt;T&gt;, exception hierarchy, SPI</td><td>none</td></tr>
-            <tr><td>resiliencia-patterns</td><td>Retry, Timeout, CircuitBreaker, Bulkhead, RateLimiter</td><td>none</td></tr>
-            <tr><td>resiliencia-compose</td><td>Policy — fluent, validated composition</td><td>none</td></tr>
-            <tr><td>resiliencia-metrics</td><td>ResilienciaMetrics abstraction</td><td>none</td></tr>
-            <tr><td>resiliencia-spring</td><td>Auto-config, @WithRetry, @WithCircuitBreaker</td><td>Spring Boot</td></tr>
-            <tr><td>resiliencia-test</td><td>Fakes, ManualClock, JUnit 5 assertions</td><td>JUnit 5</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.core/module-summary.html">resiliencia-core</a></td><td>Resilient, Outcome&lt;T&gt;, exception hierarchy, SPI</td><td>none</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.patterns/module-summary.html">resiliencia-patterns</a></td><td>Retry, Timeout, CircuitBreaker, Bulkhead, RateLimiter</td><td>none</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.compose/module-summary.html">resiliencia-compose</a></td><td>Policy — fluent, validated composition</td><td>none</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.metrics/module-summary.html">resiliencia-metrics</a></td><td>ResilienciaMetrics abstraction</td><td>none</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.micrometer/module-summary.html">resiliencia-micrometer</a></td><td>ResilienciaMetrics over Micrometer's MeterRegistry</td><td>Micrometer</td></tr>
+            <tr><td><a href="apidocs/io.github.teceli.resiliencia.test/module-summary.html">resiliencia-test</a></td><td>Fakes, ManualClock, JUnit 5 assertions</td><td>JUnit 5</td></tr>
+            <tr><td>resiliencia-spring <span class="module-status">(coming soon)</span></td><td>Auto-config, @WithRetry, @WithCircuitBreaker</td><td>Spring Boot</td></tr>
           </tbody>
         </table>
       </div>
@@ -534,3 +546,5 @@ policy.call(() -&gt; api.fetchOrder(id));</code></pre>
     </nav>
   </div>
 </footer>
+</body>
+</html>
