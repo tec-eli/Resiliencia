@@ -31,7 +31,7 @@
         <dependency>
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-aop</artifactId>
-            <version>5.1.4</version>
+            <version>5.1.6</version>
         </dependency>
 
         <dependency>
