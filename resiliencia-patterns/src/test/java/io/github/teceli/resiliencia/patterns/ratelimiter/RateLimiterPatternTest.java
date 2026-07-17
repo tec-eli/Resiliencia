@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -79,6 +80,19 @@ class RateLimiterPatternTest {
         assertThat(limiter.call(() -> "after idle")).isEqualTo("after idle");
         assertThrows(RateLimiterException.class, () ->
             limiter.call(() -> "rejected"));
+    }
+
+    @Test
+    void should_notThrowArithmeticException_when_periodIsTinyAndIdleForCenturies() {
+        var manualClock = new ManualClock();
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, Duration.ofNanos(1)).withClock(manualClock);
+        limiter.call(() -> "first");
+
+        // periodsElapsed (elapsed / period) overflows long here, which used to escape
+        // advanceWindow as an ArithmeticException instead of being handled.
+        manualClock.advance(Duration.ofDays(365 * 300));
+
+        assertThat(limiter.call(() -> "after centuries idle")).isEqualTo("after centuries idle");
     }
 
     @Test
@@ -247,14 +261,15 @@ class RateLimiterPatternTest {
 
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",0, PERIOD));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, Duration.ZERO));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
-        assertThrows(NullPointerException.class, () ->
-            RateLimiter.<String>of("rate-limiter",1, null));
+        assertThatNullPointerException()
+            .isThrownBy(() ->
+                RateLimiter.<String>of("rate-limiter",1, null));
     }
 
     @Test

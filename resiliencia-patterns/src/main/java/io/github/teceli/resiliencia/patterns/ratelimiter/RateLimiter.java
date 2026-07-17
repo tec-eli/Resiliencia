@@ -271,9 +271,18 @@ public final class RateLimiter<T> implements Resilient<T> {
     private WindowState advanceWindow(WindowState current, Instant now) {
         var elapsed = Duration.between(current.windowStart, now);
         if (elapsed.compareTo(period) >= 0) {
-            var periodsElapsed = elapsed.dividedBy(period);
-            var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
-            return new WindowState(newWindowStart, 0);
+            // Clamp elapsed the same way maxWait is clamped in tryAcquire, then fall back to
+            // resetting the window straight to `now` if periodsElapsed / the multiplied-back
+            // duration still overflows — e.g. a sub-millisecond period left idle for years, where
+            // no single clamp constant covers every period/elapsed combination.
+            var elapsedClamped = elapsed.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : elapsed;
+            try {
+                var periodsElapsed = elapsedClamped.dividedBy(period);
+                var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
+                return new WindowState(newWindowStart, 0);
+            } catch (ArithmeticException e) {
+                return new WindowState(now, 0);
+            }
         }
         return current;
     }
