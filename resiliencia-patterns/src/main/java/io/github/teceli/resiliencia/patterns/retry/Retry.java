@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
@@ -225,39 +226,57 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
                 emit(new RetryEvent.Success(clock.instant(), name, attempt));
                 return new ExecutionResult<>(new Outcome.Success<>(result), attempt, FailureKind.EXHAUSTED);
             } catch (Exception e) {
-                emit(new RetryEvent.AttemptFailed(clock.instant(), name, attempt, e));
-
-                // shouldRetry is evaluated before the attempt count and deadline, per its contract
-                // (see withShouldRetry Javadoc) — a non-retryable exception is Rejected even on the
-                // last attempt, not misreported as Exhausted.
-                if (!testShouldRetry(e)) {
-                    emit(new RetryEvent.Rejected(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.REJECTED);
-                }
-
-                if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
-                    emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
-                }
-
-                try {
-                    sleep(Math.min(applyJitter(delayMs), maxDelayMs));
-                } catch (InterruptedDuringBackoff interrupted) {
-                    emit(new RetryEvent.Interrupted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED);
-                }
-
-                // Re-check deadline after sleep: if it passed, stop immediately without attempting
-                // another operation, in line with the promise in docs/patterns/retry.md:62-64
-                if (deadlineExceeded(startInstant)) {
-                    emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
+                var failureResult = handleFailedAttempt(e, attempt, startInstant, delayMs);
+                if (failureResult.isPresent()) {
+                    return failureResult.get();
                 }
                 delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
             }
         }
 
         throw new AssertionError("Loop must always return");
+    }
+
+    /**
+     * Reacts to a single failed attempt: emits {@link RetryEvent.AttemptFailed}, then decides
+     * whether the retry loop must stop here (Rejected, Exhausted, or Interrupted) or continue.
+     * An empty result means the caller should grow the backoff delay and try again.
+     */
+    private Optional<ExecutionResult<T>> handleFailedAttempt(Exception e, int attempt, Instant startInstant,
+                                                               long delayMs) {
+        emit(new RetryEvent.AttemptFailed(clock.instant(), name, attempt, e));
+
+        // shouldRetry is evaluated before the attempt count and deadline, per its contract
+        // (see withShouldRetry Javadoc) — a non-retryable exception is Rejected even on the
+        // last attempt, not misreported as Exhausted.
+        if (!testShouldRetry(e)) {
+            emit(new RetryEvent.Rejected(clock.instant(), name, attempt, e));
+            return Optional.of(new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.REJECTED));
+        }
+
+        if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
+            return Optional.of(exhausted(attempt, e));
+        }
+
+        try {
+            sleep(Math.min(applyJitter(delayMs), maxDelayMs));
+        } catch (InterruptedDuringBackoff interrupted) {
+            emit(new RetryEvent.Interrupted(clock.instant(), name, attempt, e));
+            return Optional.of(new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED));
+        }
+
+        // Re-check deadline after sleep: if it passed, stop immediately without attempting
+        // another operation, in line with the promise in docs/patterns/retry.md:62-64
+        if (deadlineExceeded(startInstant)) {
+            return Optional.of(exhausted(attempt, e));
+        }
+
+        return Optional.empty();
+    }
+
+    private ExecutionResult<T> exhausted(int attempt, Exception e) {
+        emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
+        return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
     }
 
     /**
