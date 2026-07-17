@@ -82,6 +82,19 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_notThrowArithmeticException_when_periodIsTinyAndIdleForCenturies() {
+        var manualClock = new ManualClock();
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, Duration.ofNanos(1)).withClock(manualClock);
+        limiter.call(() -> "first");
+
+        // periodsElapsed (elapsed / period) overflows long here, which used to escape
+        // advanceWindow as an ArithmeticException instead of being handled.
+        manualClock.advance(Duration.ofDays(365 * 300));
+
+        assertThat(limiter.call(() -> "after centuries idle")).isEqualTo("after centuries idle");
+    }
+
+    @Test
     void should_waitForNextWindow_when_maxWaitAllowsIt() {
         var manualClock = new ManualClock();
         var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
