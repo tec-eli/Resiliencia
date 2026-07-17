@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -260,14 +261,15 @@ class RateLimiterPatternTest {
 
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",0, PERIOD));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, Duration.ZERO));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
-        assertThrows(NullPointerException.class, () ->
-            RateLimiter.<String>of("rate-limiter",1, null));
+        assertThatNullPointerException()
+            .isThrownBy(() ->
+                RateLimiter.<String>of("rate-limiter",1, null));
     }
 
     @Test
