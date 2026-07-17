@@ -158,6 +158,14 @@ class OpenTelemetryResilienceMetricsTest {
         }
 
         @Test
+        void should_incrementByZero_when_closedFromHalfOpenObserved_with_noSuccessfulTestCalls() {
+            metrics.observe(new CircuitBreakerCounters.ClosedFromHalfOpen("myCb", 0));
+
+            assertThat(meter.counterTotal(MetricNames.CIRCUIT_BREAKER_CLOSED_TEST_CALLS,
+                Attributes.of(KEY_NAME, "myCb"))).isEqualTo(0.0);
+        }
+
+        @Test
         void should_recordSafeDurationPair_when_callRecordedObserved_and_defaultMode() {
             metrics.observe(new CircuitBreakerCounters.CallRecorded("myCb", true, Duration.ofMillis(20)));
 
@@ -259,6 +267,53 @@ class OpenTelemetryResilienceMetricsTest {
 
             assertThat(meter.lastGauge(MetricNames.RATE_LIMITER_REMAINING_PERMITS, Attributes.of(KEY_NAME, "myLimiter")))
                 .isEqualTo(7.0);
+        }
+    }
+
+    @Nested
+    class MultiInstanceIsolation {
+        @Test
+        void should_keepStateIndependent_when_twoCircuitBreakersObserved() {
+            metrics.observe(new CircuitBreakerSnapshot.State("cbA", CircuitBreakerSnapshot.Phase.OPEN));
+            metrics.observe(new CircuitBreakerSnapshot.State("cbB", CircuitBreakerSnapshot.Phase.CLOSED));
+
+            assertThat(meter.lastGauge(MetricNames.CIRCUIT_BREAKER_STATE, Attributes.of(KEY_NAME, "cbA")))
+                .isEqualTo(1.0);
+            assertThat(meter.lastGauge(MetricNames.CIRCUIT_BREAKER_STATE, Attributes.of(KEY_NAME, "cbB")))
+                .isEqualTo(0.0);
+        }
+
+        @Test
+        void should_keepFailureRateIndependent_when_twoCircuitBreakersObserved() {
+            metrics.observe(new CircuitBreakerSnapshot.FailureRate("cbA", 0.75));
+            metrics.observe(new CircuitBreakerSnapshot.FailureRate("cbB", 0.10));
+
+            assertThat(meter.lastGauge(MetricNames.CIRCUIT_BREAKER_FAILURE_RATE, Attributes.of(KEY_NAME, "cbA")))
+                .isEqualTo(0.75);
+            assertThat(meter.lastGauge(MetricNames.CIRCUIT_BREAKER_FAILURE_RATE, Attributes.of(KEY_NAME, "cbB")))
+                .isEqualTo(0.10);
+        }
+
+        @Test
+        void should_keepActiveCallsIndependent_when_twoBulkheadsObserved() {
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkheadA", 3));
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkheadB", 9));
+
+            assertThat(meter.lastGauge(MetricNames.BULKHEAD_ACTIVE_CALLS, Attributes.of(KEY_NAME, "bulkheadA")))
+                .isEqualTo(3.0);
+            assertThat(meter.lastGauge(MetricNames.BULKHEAD_ACTIVE_CALLS, Attributes.of(KEY_NAME, "bulkheadB")))
+                .isEqualTo(9.0);
+        }
+
+        @Test
+        void should_keepRemainingPermitsIndependent_when_twoRateLimitersObserved() {
+            metrics.observe(new RateLimiterSnapshot.RemainingPermits("limiterA", 2));
+            metrics.observe(new RateLimiterSnapshot.RemainingPermits("limiterB", 8));
+
+            assertThat(meter.lastGauge(MetricNames.RATE_LIMITER_REMAINING_PERMITS, Attributes.of(KEY_NAME, "limiterA")))
+                .isEqualTo(2.0);
+            assertThat(meter.lastGauge(MetricNames.RATE_LIMITER_REMAINING_PERMITS, Attributes.of(KEY_NAME, "limiterB")))
+                .isEqualTo(8.0);
         }
     }
 }

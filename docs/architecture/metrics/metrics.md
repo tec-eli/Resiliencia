@@ -437,6 +437,15 @@ without accounting for that difference; a consumer wanting "success rate per att
 `totalAttempts` from `Success` records aggregated against the attempt counts, not a naive
 `success / (success + attempts)` division.
 
+**A note on the two `timer`-typed rows (`resilience.timeout.duration`,
+`resilience.circuitbreaker.calls`):** the base name in the table above is only what's emitted
+under `DurationInstrumentationMode.DETAILED` (a `DoubleHistogram`/`DistributionSummary`). Under the
+**default** `SAFE` mode, the same row is instead exposed as a name-suffixed counter pair —
+`<name>.count` (call count) and `<name>.sum` (accumulated duration) — to stay lock-free and avoid
+the histogram's per-record pinning risk documented below. A consumer building a dashboard against
+the base name alone will find nothing under the default mode; see "Backend audit" below for the
+full SAFE/DETAILED rationale.
+
 ---
 
 ## Identity (`name`)
