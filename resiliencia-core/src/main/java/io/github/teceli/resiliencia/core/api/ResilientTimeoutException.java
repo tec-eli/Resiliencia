@@ -2,6 +2,7 @@ package io.github.teceli.resiliencia.core.api;
 
 import java.io.Serial;
 import java.time.Duration;
+import java.util.Objects;
 
 /**
  * Thrown when an operation does not complete within the configured timeout.
@@ -16,7 +17,7 @@ public final class ResilientTimeoutException extends ResilientException {
     private final Duration timeout;
 
     public ResilientTimeoutException(Duration timeout) {
-        super("Operation timed out after " + timeout);
+        super("Operation timed out after " + Objects.requireNonNull(timeout, "timeout must not be null"));
         this.timeout = timeout;
     }
 

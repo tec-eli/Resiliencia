@@ -1,5 +1,7 @@
 package io.github.teceli.resiliencia.core.api;
 
+import io.github.teceli.resiliencia.core.internal.AsyncThreadNaming;
+
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
@@ -38,7 +40,7 @@ public interface Resilient<T> {
     default CompletableFuture<T> callAsync(Operation<T> operation) {
         Objects.requireNonNull(operation, "operation must not be null");
         var future = new CompletableFuture<T>();
-        var worker = Thread.ofVirtual().name("resiliencia-async").start(() -> {
+        var worker = Thread.ofVirtual().name(AsyncThreadNaming.next()).start(() -> {
             try {
                 future.complete(call(operation));
             } catch (Exception e) {

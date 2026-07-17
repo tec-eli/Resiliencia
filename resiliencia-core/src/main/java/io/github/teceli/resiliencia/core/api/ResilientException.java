@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.core.api;
 
 import java.io.Serial;
+import java.util.Objects;
 
 /**
  * Base exception for all resiliencia errors. Extends RuntimeException (unchecked).
@@ -12,10 +13,11 @@ public class ResilientException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public ResilientException(String message) {
-        super(message);
+        super(Objects.requireNonNull(message, "message must not be null"));
     }
 
     public ResilientException(String message, Throwable cause) {
-        super(message, cause);
+        super(Objects.requireNonNull(message, "message must not be null"),
+                Objects.requireNonNull(cause, "cause must not be null"));
     }
 }
