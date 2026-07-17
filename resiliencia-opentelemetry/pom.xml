@@ -24,9 +24,21 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.github.teceli</groupId>
+            <artifactId>resiliencia-patterns</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
             <version>1.63.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <version>1.63.0</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
