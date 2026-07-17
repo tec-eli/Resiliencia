@@ -554,9 +554,8 @@ class CircuitBreakerPatternTest {
     void should_countErrorTowardFailureRate_when_thrownWhileClosed() {
         // An Error is never wrapped into Outcome, but it is still recorded into the sliding
         // window as a failed call (see CircuitBreaker.outcome()'s catch (Error e) block). This
-        // is not limited to HalfOpen permit bookkeeping the way docs/architecture/ARCHITECTURE.md's
-        // "Error handling" section frames it — it also feeds the Closed-state window and can open
-        // the circuit, exactly like any other recorded failure.
+        // applies beyond HalfOpen permit bookkeeping alone — it also feeds the Closed-state
+        // window and can open the circuit, exactly like any other recorded failure.
         var circuitBreaker = CircuitBreaker.<String>of("test")
                 .withSlidingWindowSize(2)
                 .withFailureRateThreshold(0.5);
@@ -577,7 +576,7 @@ class CircuitBreakerPatternTest {
         // Open -> HalfOpen (only on the transition to Closed), so a HalfOpen test call's
         // CallRecorded event reports a currentFailureRate still dominated by the Closed-period
         // data that tripped the circuit open, not just the HalfOpen test calls themselves.
-        // docs/architecture/patterns/circuit-breaker.md does not specify this either way.
+        // This is intentionally unspecified and may change.
         var clock = new ManualClock();
         var events = new ArrayList<CircuitBreakerEvent>();
         var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
@@ -815,8 +814,8 @@ class CircuitBreakerPatternTest {
         for (var outcome : outcomesArray) {
             if (outcome instanceof Outcome.Success<?>) {
                 successCount++;
-            } else if (outcome instanceof Outcome.Failure<?> f &&
-                    f.cause() instanceof CircuitBreakerOpenException) {
+            } else if (outcome instanceof Outcome.Failure<?>(Throwable cause) &&
+                    cause instanceof CircuitBreakerOpenException) {
                 rejectedCount++;
             }
         }
@@ -825,8 +824,7 @@ class CircuitBreakerPatternTest {
         // Stragglers that make their first admission check only after the circuit has already
         // closed race against unconditional Closed admission instead: there is no synchronization
         // barrier forcing them to be evaluated against the HalfOpen budget, so more than
-        // permittedCalls can succeed under heavy contention. See docs/architecture/patterns/
-        // circuit-breaker.md, "HalfOpen admission under concurrent bursts".
+        // permittedCalls can succeed under heavy contention. This is deliberate design, not a bug.
         assertThat(successCount).isGreaterThanOrEqualTo(permittedCalls);
         assertThat(successCount + rejectedCount).isEqualTo(threadCount);
     }

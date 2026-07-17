@@ -74,8 +74,8 @@ class BulkheadPatternTest {
         var waiter = Thread.ofVirtual().start(() ->
                 waiterResult.set(bulkhead.call(() -> "waited")));
 
-        // Free the permit shortly after the waiter started queuing for it.
-        Thread.sleep(50);
+        // Free the permit once the waiter is actually queuing for it.
+        awaitBlockedOnPermit(waiter);
         releaseHolder.countDown();
 
         holder.join(Duration.ofSeconds(5));
@@ -120,17 +120,15 @@ class BulkheadPatternTest {
         }));
         assertThat(holderInside.await(5, TimeUnit.SECONDS)).isTrue();
 
-        var waiterThread = new AtomicReference<Thread>();
         var outcomeRef = new AtomicReference<Outcome<String>>();
         var waiterStarted = new CountDownLatch(1);
         var waiter = Thread.ofVirtual().start(() -> {
-            waiterThread.set(Thread.currentThread());
             waiterStarted.countDown();
             outcomeRef.set(bulkhead.outcome(() -> "should_be_interrupted"));
         });
 
         assertThat(waiterStarted.await(5, TimeUnit.SECONDS)).isTrue();
-        Thread.sleep(50); // Give waiter time to start waiting on the semaphore
+        awaitBlockedOnPermit(waiter);
         waiter.interrupt();
 
         waiter.join(Duration.ofSeconds(5));
@@ -199,13 +197,18 @@ class BulkheadPatternTest {
         var bulkhead = Bulkhead.<String>of("bulkhead",2).withMaxWait(Duration.ofSeconds(10));
         var inFlight = new AtomicInteger(0);
         var maxObserved = new AtomicInteger(0);
+        // Rendezvous the first two permit holders so the overlap is guaranteed rather than
+        // merely likely: both must arrive before either proceeds, forcing maxObserved to 2.
+        // Later callers count down an already-zero latch and pass straight through.
+        var firstTwoOverlap = new CountDownLatch(2);
 
         var threads = new ArrayList<Thread>();
         for (int i = 0; i < 10; i++) {
             threads.add(Thread.ofVirtual().start(() -> bulkhead.call(() -> {
                 var current = inFlight.incrementAndGet();
                 maxObserved.accumulateAndGet(current, Math::max);
-                sleepQuietly(20);
+                firstTwoOverlap.countDown();
+                awaitQuietly(firstTwoOverlap);
                 inFlight.decrementAndGet();
                 return "done";
             })));
@@ -214,7 +217,9 @@ class BulkheadPatternTest {
             thread.join(Duration.ofSeconds(10));
         }
 
-        assertThat(maxObserved.get()).isLessThanOrEqualTo(2);
+        // The rendezvous above guarantees the first two callers overlap; the semaphore must
+        // still ensure a third never joins them.
+        assertThat(maxObserved.get()).isEqualTo(2);
     }
 
     @Test
@@ -303,7 +308,7 @@ class BulkheadPatternTest {
         var waiterResult = new AtomicReference<String>();
         var waiter = Thread.ofVirtual().start(() -> waiterResult.set(bulkhead.call(() -> "waited")));
 
-        Thread.sleep(50);
+        awaitBlockedOnPermit(waiter);
         releaseHolder.countDown();
         holder.join(Duration.ofSeconds(5));
         waiter.join(Duration.ofSeconds(5));
@@ -378,12 +383,19 @@ class BulkheadPatternTest {
         }
     }
 
-    private static void sleepQuietly(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ResilientException("interrupted", e);
+    /**
+     * Polls until {@code thread} is blocked waiting for a permit (a bulkhead wait parks on
+     * {@link java.util.concurrent.Semaphore#tryAcquire(long, TimeUnit)}, so a queued thread sits
+     * in {@code TIMED_WAITING}), instead of a fixed-duration {@code Thread.sleep} that would be
+     * racy under load and is flagged by Sonar (java:S2925).
+     */
+    private static void awaitBlockedOnPermit(Thread thread) {
+        var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (thread.getState() != Thread.State.TIMED_WAITING) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError(thread.getName() + " never reached TIMED_WAITING waiting for a permit");
+            }
+            Thread.onSpinWait();
         }
     }
 }
