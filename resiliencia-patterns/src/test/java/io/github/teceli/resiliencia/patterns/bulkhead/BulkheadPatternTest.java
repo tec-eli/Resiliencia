@@ -287,7 +287,7 @@ class BulkheadPatternTest {
 
     @Test
     void should_notOverflow_when_maxWaitExceedsMaxMillisDuration() throws Exception {
-        // Duration.toMillis() would throw ArithmeticException for a duration this large;
+        // Duration.toMillis() would throw ArithmeticException for a duration this large
         // Bulkhead must clamp it to Long.MAX_VALUE instead of letting that escape.
         var bulkhead = Bulkhead.<String>of("bulkhead", 1).withMaxWait(Duration.ofMillis(Long.MAX_VALUE).plusDays(1));
         var holderInside = new CountDownLatch(1);

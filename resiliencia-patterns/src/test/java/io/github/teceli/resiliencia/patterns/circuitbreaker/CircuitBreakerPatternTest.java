@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -600,8 +601,9 @@ class CircuitBreakerPatternTest {
 
     @Test
     void should_throwNullPointerException_when_listenerIsNull() {
-        assertThrows(NullPointerException.class, () ->
-            CircuitBreaker.<String>of("test").withListener(null));
+        assertThatNullPointerException()
+            .isThrownBy(() ->
+                CircuitBreaker.<String>of("test").withListener(null));
     }
 
     @Test
@@ -684,6 +686,22 @@ class CircuitBreakerPatternTest {
         assertThat(circuitBreaker.state())
                 .isInstanceOfSatisfying(CircuitState.Open.class, open ->
                         assertThat(open.remainingWait()).isEqualTo(WAIT_DURATION.dividedBy(2)));
+    }
+
+    @Test
+    void should_notThrowException_when_openedAtIsNearInstantMax() {
+        var clock = new ManualClock();
+        var nearMax = Instant.MAX.minusSeconds(10);
+        clock.advance(Duration.between(clock.instant(), nearMax));
+        var circuitBreaker = openedCircuitBreaker(clock);
+
+        // openedAt.plus(waitDurationInOpenState) overflows past Instant.MAX here; state() and
+        // tryAcquirePermission() must clamp instead of letting ArithmeticException/DateTimeException escape.
+        assertThat(circuitBreaker.state())
+                .isInstanceOfSatisfying(CircuitState.Open.class, open ->
+                        assertThat(open.remainingWait()).isPositive());
+        assertThrows(CircuitBreakerOpenException.class, () ->
+            circuitBreaker.call(() -> "rejected"));
     }
 
     @Test

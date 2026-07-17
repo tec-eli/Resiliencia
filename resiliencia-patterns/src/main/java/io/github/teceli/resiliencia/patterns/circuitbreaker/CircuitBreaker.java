@@ -10,6 +10,7 @@ import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -239,10 +240,24 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             case CircuitState.HalfOpen halfOpen ->
                 new CircuitState.HalfOpen(slot.permitsIssued.get(), slot.successes.get());
             case CircuitState.Open open -> {
-                var remaining = Duration.between(clock.instant(), open.openedAt().plus(waitDurationInOpenState));
+                var remaining = Duration.between(clock.instant(), openDeadline(open.openedAt()));
                 yield new CircuitState.Open(open.openedAt(), remaining.isNegative() ? Duration.ZERO : remaining);
             }
         };
+    }
+
+    /**
+     * The instant a HalfOpen test call becomes due, i.e. {@code openedAt + waitDurationInOpenState}.
+     * Clamped to {@link Instant#MAX} instead of letting {@code Instant.plus} throw when
+     * {@code openedAt} is already near the representable range's end (e.g. a contrived clock) —
+     * an unreachable deadline just means the circuit correctly never transitions early.
+     */
+    private Instant openDeadline(Instant openedAt) {
+        try {
+            return openedAt.plus(waitDurationInOpenState);
+        } catch (DateTimeException | ArithmeticException e) {
+            return Instant.MAX;
+        }
     }
 
     @Override
@@ -318,7 +333,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         return switch (slot.publicState) {
             case CircuitState.Closed c -> null;
             case CircuitState.Open open -> {
-                var deadline = open.openedAt().plus(waitDurationInOpenState);
+                var deadline = openDeadline(open.openedAt());
                 var now = clock.instant();
                 if (now.isBefore(deadline)) {
                     emit(new CircuitBreakerEvent.Rejected(
