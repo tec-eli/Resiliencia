@@ -10,6 +10,7 @@
 [![Build & Test](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tec-eli_Resiliencia&metric=alert_status&token=18f4fe092678f4960cd01cfd2b44f5abc314b620)](https://sonarcloud.io/summary/new_code?id=tec-eli_Resiliencia)
 [![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
+[![OSS Index Dependency Scan](https://github.com/tec-eli/resiliencia/actions/workflows/ossindex.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/ossindex.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/Resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/Resiliencia)
 [![CodeQL](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml)
 [![Static Analysis](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml)
