@@ -1,6 +1,8 @@
 package io.github.teceli.resiliencia.core.api;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -83,6 +85,7 @@ class ResilientCallAsyncTest {
     }
 
     @Test
+    @Execution(ExecutionMode.SAME_THREAD)
     void should_completeExceptionallyAndRethrowOnWorkerThread_when_operationThrowsError() throws Exception {
         var boom = new OutOfMemoryError("simulated");
         var originalHandler = Thread.getDefaultUncaughtExceptionHandler();
