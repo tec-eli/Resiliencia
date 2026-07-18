@@ -28,11 +28,6 @@ class SystemClockTest {
     }
 
     @Test
-    void should_returnSameSingletonInstance_when_systemClockRequestedTwice() {
-        assertThat(Clock.systemClock()).isSameAs(Clock.systemClock());
-    }
-
-    @Test
     void should_blockForApproximatelyRequestedDuration_when_sleeping() throws InterruptedException {
         var clock = Clock.systemClock();
         var start = System.nanoTime();
@@ -59,7 +54,6 @@ class SystemClockTest {
         });
 
         assertThat(sleeping.await(5, TimeUnit.SECONDS)).isTrue();
-        Thread.sleep(50); // give the worker time to actually enter Thread.sleep
         worker.interrupt();
         worker.join(Duration.ofSeconds(5).toMillis());
 

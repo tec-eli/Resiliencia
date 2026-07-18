@@ -57,11 +57,12 @@ class ResilientCallAsyncTest {
     void should_interruptOperation_when_futureCancelled() throws Exception {
         var operationStarted = new CountDownLatch(1);
         var interrupted = new CountDownLatch(1);
+        var neverReleased = new CountDownLatch(1);
 
         var future = passthrough().callAsync(() -> {
             operationStarted.countDown();
             try {
-                Thread.sleep(30_000);
+                neverReleased.await();
                 return "never";
             } catch (InterruptedException e) {
                 interrupted.countDown();
