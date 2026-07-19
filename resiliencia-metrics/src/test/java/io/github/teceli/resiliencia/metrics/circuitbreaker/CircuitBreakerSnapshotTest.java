@@ -45,20 +45,19 @@ class CircuitBreakerSnapshotTest {
     }
 
     @Test
-    // Documents current behavior: the record performs no validation, so a negative rate — outside
-    // the real [0.0, 1.0] domain — is still accepted rather than rejected.
     void should_allowNegativeRate_when_valueIsInvalidForARealFailureRate() {
         var failureRate = new CircuitBreakerSnapshot.FailureRate("myCB", -0.1);
 
-        assertThat(failureRate.rate()).isEqualTo(-0.1);
+        assertThat(failureRate.rate())
+            .as("record performs no validation, so a rate outside the real [0.0, 1.0] domain is still accepted")
+            .isEqualTo(-0.1);
     }
 
     @Test
-    // Documents current behavior: the record performs no validation, so a null name is accepted
-    // rather than rejected at construction.
     void should_allowNullName_when_nameNotProvided() {
         var state = new CircuitBreakerSnapshot.State(null, CircuitBreakerSnapshot.Phase.CLOSED);
 
-        assertThat(state.name()).isNull();
+        assertThat(state.name()).as("record performs no validation, so a null name is accepted rather than rejected")
+            .isNull();
     }
 }

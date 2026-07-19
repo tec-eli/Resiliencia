@@ -411,22 +411,22 @@ class ResilienceMetricsListenerTest {
         }
 
         @Test
-        // Actual behavior: safeObserve() wraps every backend call in try/catch(Exception), so the
-        // NullPointerException thrown by invoking observe(...) on a null metrics reference is
-        // caught and logged (WARN), not propagated to the caller of onEvent(...).
         void should_swallowSilently_when_metricsIsNullAndEventEmitted() {
             var nullMetricsListener = new ResilienceMetricsListener(null);
             var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1,
                 new RuntimeException("boom"));
 
-            assertThatCode(() -> nullMetricsListener.onEvent(event)).doesNotThrowAnyException();
+            assertThatCode(() -> nullMetricsListener.onEvent(event))
+                .as("safeObserve() wraps every backend call in try/catch, so the NullPointerException from a null "
+                    + "metrics reference is caught and logged, not propagated to the caller")
+                .doesNotThrowAnyException();
         }
 
         @Test
-        // Actual behavior: this NullPointerException originates from Set.copyOf(null) inside the
-        // constructor, not from an explicit Objects.requireNonNull guard in this class.
         void should_throwNullPointerException_when_causeAllowlistIsNull() {
             assertThatThrownBy(() -> new ResilienceMetricsListener(metrics, null))
+                .as("this NullPointerException originates from Set.copyOf(null) inside the constructor, not from "
+                    + "an explicit Objects.requireNonNull guard")
                 .isInstanceOf(NullPointerException.class);
         }
     }
@@ -434,8 +434,6 @@ class ResilienceMetricsListenerTest {
     @Nested
     class NullNameHandling {
         @Test
-        // Documents current behavior: neither the source event nor the Counters record it maps to
-        // validates the name, so a null name flows through untouched instead of being rejected.
         void should_forwardEventWithNullName_when_sourceEventHasNullName() {
             var event = new RetryEvent.AttemptFailed(Instant.now(), null, 1, new RuntimeException("boom"));
 
@@ -444,17 +442,16 @@ class ResilienceMetricsListenerTest {
             var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
             verify(metrics).observe(captor.capture());
             assertThat(captor.getValue()).isInstanceOf(RetryCounters.AttemptFailed.class);
-            assertThat(((RetryCounters.AttemptFailed) captor.getValue()).name()).isNull();
+            assertThat(((RetryCounters.AttemptFailed) captor.getValue()).name())
+                .as("neither the source event nor the Counters record it maps to validates the name, so a null "
+                    + "name flows through untouched instead of being rejected")
+                .isNull();
         }
     }
 
     @Nested
     class NameCardinality {
         @Test
-        // Documents current behavior: unlike the cause tag, which is bounded by causeAllowlist
-        // (see CardinalityControl above), the listener applies no bound to the `name` dimension —
-        // every distinct name is forwarded as-is. Cardinality control for names, if needed, is the
-        // backend's responsibility, not this listener's.
         void should_forwardEveryDistinctName_when_manyUniqueNamesObserved() {
             var uniqueNameCount = 500;
             for (var i = 0; i < uniqueNameCount; i++) {
@@ -468,7 +465,10 @@ class ResilienceMetricsListenerTest {
                 .map(counters -> ((RetryCounters.AttemptFailed) counters).name())
                 .distinct()
                 .count();
-            assertThat(distinctNames).isEqualTo(uniqueNameCount);
+            assertThat(distinctNames)
+                .as("unlike the cause tag, which is bounded by causeAllowlist (see CardinalityControl above), "
+                    + "the listener applies no bound to the name dimension — every distinct name is forwarded as-is")
+                .isEqualTo(uniqueNameCount);
         }
     }
 

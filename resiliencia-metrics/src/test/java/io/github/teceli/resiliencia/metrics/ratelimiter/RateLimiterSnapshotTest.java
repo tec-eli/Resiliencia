@@ -38,21 +38,20 @@ class RateLimiterSnapshotTest {
     }
 
     @Test
-    // Documents current behavior: the record performs no validation, so a negative remaining
-    // value — which cannot occur from real RateLimiter usage — is still accepted rather than
-    // rejected.
     void should_allowNegativeRemaining_when_valueIsInvalidForARealRateLimiter() {
         var remainingPermits = new RateLimiterSnapshot.RemainingPermits("myLimiter", -1);
 
-        assertThat(remainingPermits.remaining()).isEqualTo(-1);
+        assertThat(remainingPermits.remaining())
+            .as("record performs no validation, so a value that can't occur from real RateLimiter usage is accepted")
+            .isEqualTo(-1);
     }
 
     @Test
-    // Documents current behavior: the record performs no validation, so a null name is accepted
-    // rather than rejected at construction.
     void should_allowNullName_when_nameNotProvided() {
         var remainingPermits = new RateLimiterSnapshot.RemainingPermits(null, 10);
 
-        assertThat(remainingPermits.name()).isNull();
+        assertThat(remainingPermits.name())
+            .as("record performs no validation, so a null name is accepted rather than rejected")
+            .isNull();
     }
 }

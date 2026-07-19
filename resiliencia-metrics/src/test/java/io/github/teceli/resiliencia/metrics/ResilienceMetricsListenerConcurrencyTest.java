@@ -17,14 +17,9 @@ import java.util.concurrent.atomic.LongAdder;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@link ResilienceMetricsListener} holds no internal per-name registry of its own — see
- * {@code resolveCause} in the production class — every {@code onEvent(...)} call is stateless
- * apart from reading the immutable {@code causeAllowlist}. So the meaningful concurrency scenario
- * for this module is not "a map race inside resiliencia-metrics" (there is none), but the
- * realistic production scenario: several resiliencia patterns sharing one listener instance and
- * invoking {@code onEvent(...)} concurrently, for the same name and for different names. These
- * tests verify that under contention every event still reaches the backend exactly once — no lost
- * updates, no duplicate forwarding, and correct per-name/per-cause classification.
+ * {@link ResilienceMetricsListener} itself holds no per-name state, so these tests exercise the real
+ * concurrency scenario instead: several patterns sharing one listener instance and calling
+ * {@code onEvent(...)} concurrently, for the same and for different names.
  */
 class ResilienceMetricsListenerConcurrencyTest {
 
@@ -75,10 +70,14 @@ class ResilienceMetricsListenerConcurrencyTest {
             var completedInTime = done.await(10, TimeUnit.SECONDS);
 
             // Assert
-            assertThat(completedInTime).isTrue();
-            assertThat(countersByName.keySet()).containsExactlyInAnyOrderElementsOf(names);
+            assertThat(completedInTime).as("all threads should finish emitting within the timeout").isTrue();
+            assertThat(countersByName.keySet())
+                .as("every name should reach the backend, even under contention")
+                .containsExactlyInAnyOrderElementsOf(names);
             for (var name : names) {
-                assertThat(countersByName.get(name).sum()).isEqualTo((long) threadsPerName * eventsPerThread);
+                assertThat(countersByName.get(name).sum())
+                    .as("no event for '%s' should be lost or duplicated across concurrent threads", name)
+                    .isEqualTo((long) threadsPerName * eventsPerThread);
             }
         }
     }
@@ -133,11 +132,15 @@ class ResilienceMetricsListenerConcurrencyTest {
             var completedInTime = done.await(10, TimeUnit.SECONDS);
 
             // Assert
-            assertThat(completedInTime).isTrue();
+            assertThat(completedInTime).as("all threads should finish emitting within the timeout").isTrue();
             for (var name : names) {
                 var causeCounts = causeCountsByName.get(name);
-                assertThat(causeCounts.get("IllegalStateException").sum()).isEqualTo(threadsPerName / 2);
-                assertThat(causeCounts.get("other").sum()).isEqualTo(threadsPerName / 2);
+                assertThat(causeCounts.get("IllegalStateException").sum())
+                    .as("allowlisted causes should be classified correctly under concurrent access")
+                    .isEqualTo(threadsPerName / 2);
+                assertThat(causeCounts.get("other").sum())
+                    .as("non-allowlisted causes should fall into the 'other' bucket under concurrent access")
+                    .isEqualTo(threadsPerName / 2);
             }
         }
     }
