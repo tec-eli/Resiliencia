@@ -29,6 +29,8 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -398,6 +400,75 @@ class ResilienceMetricsListenerTest {
             listener.onEvent(new RetryEvent.AttemptFailed(Instant.now(), "r4", 1, error4));
 
             verify(metrics, times(4)).observe(any(Counters.class));
+        }
+    }
+
+    @Nested
+    class ConstructorNullHandling {
+        @Test
+        void should_notThrow_when_metricsArgumentIsNull() {
+            assertThatCode(() -> new ResilienceMetricsListener(null)).doesNotThrowAnyException();
+        }
+
+        @Test
+        void should_swallowSilently_when_metricsIsNullAndEventEmitted() {
+            var nullMetricsListener = new ResilienceMetricsListener(null);
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1,
+                new RuntimeException("boom"));
+
+            assertThatCode(() -> nullMetricsListener.onEvent(event))
+                .as("safeObserve() wraps every backend call in try/catch, so the NullPointerException from a null "
+                    + "metrics reference is caught and logged, not propagated to the caller")
+                .doesNotThrowAnyException();
+        }
+
+        @Test
+        void should_throwNullPointerException_when_causeAllowlistIsNull() {
+            assertThatThrownBy(() -> new ResilienceMetricsListener(metrics, null))
+                .as("this NullPointerException originates from Set.copyOf(null) inside the constructor, not from "
+                    + "an explicit Objects.requireNonNull guard")
+                .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Nested
+    class NullNameHandling {
+        @Test
+        void should_forwardEventWithNullName_when_sourceEventHasNullName() {
+            var event = new RetryEvent.AttemptFailed(Instant.now(), null, 1, new RuntimeException("boom"));
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            assertThat(captor.getValue()).isInstanceOf(RetryCounters.AttemptFailed.class);
+            assertThat(((RetryCounters.AttemptFailed) captor.getValue()).name())
+                .as("neither the source event nor the Counters record it maps to validates the name, so a null "
+                    + "name flows through untouched instead of being rejected")
+                .isNull();
+        }
+    }
+
+    @Nested
+    class NameCardinality {
+        @Test
+        void should_forwardEveryDistinctName_when_manyUniqueNamesObserved() {
+            var uniqueNameCount = 500;
+            for (var i = 0; i < uniqueNameCount; i++) {
+                listener.onEvent(new RetryEvent.AttemptFailed(Instant.now(), "retry-" + i, 1,
+                    new RuntimeException("boom")));
+            }
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics, times(uniqueNameCount)).observe(captor.capture());
+            var distinctNames = captor.getAllValues().stream()
+                .map(counters -> ((RetryCounters.AttemptFailed) counters).name())
+                .distinct()
+                .count();
+            assertThat(distinctNames)
+                .as("unlike the cause tag, which is bounded by causeAllowlist (see CardinalityControl above), "
+                    + "the listener applies no bound to the name dimension — every distinct name is forwarded as-is")
+                .isEqualTo(uniqueNameCount);
         }
     }
 

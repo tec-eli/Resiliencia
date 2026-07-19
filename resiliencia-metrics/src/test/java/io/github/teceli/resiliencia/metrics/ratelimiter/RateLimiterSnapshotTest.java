@@ -29,4 +29,29 @@ class RateLimiterSnapshotTest {
 
         assertThat(withNinetySeven).isNotEqualTo(withZero);
     }
+
+    @Test
+    void should_allowZeroRemaining_when_noPermitsLeft() {
+        var remainingPermits = new RateLimiterSnapshot.RemainingPermits("myLimiter", 0);
+
+        assertThat(remainingPermits.remaining()).isZero();
+    }
+
+    @Test
+    void should_allowNegativeRemaining_when_valueIsInvalidForARealRateLimiter() {
+        var remainingPermits = new RateLimiterSnapshot.RemainingPermits("myLimiter", -1);
+
+        assertThat(remainingPermits.remaining())
+            .as("record performs no validation, so a value that can't occur from real RateLimiter usage is accepted")
+            .isEqualTo(-1);
+    }
+
+    @Test
+    void should_allowNullName_when_nameNotProvided() {
+        var remainingPermits = new RateLimiterSnapshot.RemainingPermits(null, 10);
+
+        assertThat(remainingPermits.name())
+            .as("record performs no validation, so a null name is accepted rather than rejected")
+            .isNull();
+    }
 }

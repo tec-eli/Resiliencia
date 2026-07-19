@@ -52,4 +52,28 @@ class TimeoutCountersTest {
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
     }
+
+    @Test
+    void should_allowZeroElapsed_when_succeededInstantly() {
+        var succeeded = new TimeoutCounters.Succeeded("myTimeout", Duration.ZERO);
+
+        assertThat(succeeded.elapsed()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void should_allowNegativeElapsed_when_valueIsInvalidForARealTimeout() {
+        var succeeded = new TimeoutCounters.Succeeded("myTimeout", Duration.ofMillis(-1));
+
+        assertThat(succeeded.elapsed())
+            .as("record performs no validation, so an elapsed duration that can't occur from real timing is accepted")
+            .isEqualTo(Duration.ofMillis(-1));
+    }
+
+    @Test
+    void should_allowNullName_when_nameNotProvided() {
+        var timedOut = new TimeoutCounters.TimedOut(null);
+
+        assertThat(timedOut.name()).as("record performs no validation, so a null name is accepted rather than rejected")
+            .isNull();
+    }
 }

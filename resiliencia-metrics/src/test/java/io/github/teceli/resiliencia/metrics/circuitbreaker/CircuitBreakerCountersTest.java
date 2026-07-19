@@ -58,4 +58,46 @@ class CircuitBreakerCountersTest {
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
     }
+
+    @Test
+    void should_allowZeroElapsed_when_callRecordedInstantly() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded("myCB", true, Duration.ZERO);
+
+        assertThat(callRecorded.elapsed()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void should_allowNegativeElapsed_when_valueIsInvalidForARealCall() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded("myCB", true, Duration.ofMillis(-5));
+
+        assertThat(callRecorded.elapsed())
+            .as("record performs no validation, so an elapsed duration that can't occur from real timing is accepted")
+            .isEqualTo(Duration.ofMillis(-5));
+    }
+
+    @Test
+    void should_allowZeroSuccessfulTestCalls_when_closedFromHalfOpenWithNoTestCalls() {
+        var closedFromHalfOpen = new CircuitBreakerCounters.ClosedFromHalfOpen("myCB", 0);
+
+        assertThat(closedFromHalfOpen.successfulTestCalls()).isZero();
+    }
+
+    @Test
+    void should_allowNegativeSuccessfulTestCalls_when_valueIsInvalidForARealTransition() {
+        var closedFromHalfOpen = new CircuitBreakerCounters.ClosedFromHalfOpen("myCB", -1);
+
+        assertThat(closedFromHalfOpen.successfulTestCalls())
+            .as("record performs no validation, so a count that can't occur from a real HalfOpen-to-Closed "
+                + "transition is still accepted")
+            .isEqualTo(-1);
+    }
+
+    @Test
+    void should_allowNullName_when_nameNotProvided() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded(null, true, Duration.ofMillis(10));
+
+        assertThat(callRecorded.name())
+            .as("record performs no validation, so a null name is accepted rather than rejected")
+            .isNull();
+    }
 }
