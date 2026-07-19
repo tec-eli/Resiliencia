@@ -4,27 +4,34 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.teceli</groupId>
+        <groupId>io.github.tec-eli</groupId>
         <artifactId>resiliencia</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-beta.1</version>
     </parent>
 
     <artifactId>resiliencia-opentelemetry</artifactId>
     <packaging>jar</packaging>
 
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <dependencies>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-metrics</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-patterns</artifactId>
             <version>${project.version}</version>
         </dependency>
