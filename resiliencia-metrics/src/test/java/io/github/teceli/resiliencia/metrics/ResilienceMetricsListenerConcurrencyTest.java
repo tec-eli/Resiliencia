@@ -144,4 +144,59 @@ class ResilienceMetricsListenerConcurrencyTest {
             }
         }
     }
+
+    @Test
+    void should_resolveSubtypeCauseConsistently_when_concurrentThreadsThrowMixedSubtypesOfAnAllowlistedAncestor()
+        throws InterruptedException {
+        // Arrange
+        var allowlist = Set.<Class<? extends Throwable>>of(java.io.IOException.class);
+        var causeCounts = new ConcurrentHashMap<String, LongAdder>();
+        ResilienceMetrics metrics = new ResilienceMetrics() {
+            @Override
+            public void observe(Snapshot snapshot) {
+                // Not exercised: RetryEvent.AttemptFailed never produces a Snapshot.
+            }
+
+            @Override
+            public void observe(Counters counters) {
+                var attemptFailed = (RetryCounters.AttemptFailed) counters;
+                causeCounts.computeIfAbsent(attemptFailed.cause(), key -> new LongAdder()).increment();
+            }
+        };
+        var listener = new ResilienceMetricsListener(metrics, allowlist);
+        var threadCount = 100;
+        var ready = new CountDownLatch(1);
+        var done = new CountDownLatch(threadCount);
+
+        // Act
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (var t = 0; t < threadCount; t++) {
+                var threadIndex = t;
+                executor.submit(() -> {
+                    try {
+                        ready.await();
+                        var error = threadIndex % 2 == 0
+                            ? new java.io.FileNotFoundException("subtype one")
+                            : new java.io.EOFException("subtype two");
+                        listener.onEvent(new RetryEvent.AttemptFailed(Instant.now(), "retry", 1, error));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            ready.countDown();
+            var completedInTime = done.await(10, TimeUnit.SECONDS);
+
+            // Assert
+            assertThat(completedInTime).as("all threads should finish emitting within the timeout").isTrue();
+            assertThat(causeCounts.keySet())
+                .as("both subtypes of the allowlisted ancestor should collapse to the same ancestor "
+                    + "cause tag, never their own runtime class name, keeping cardinality bounded under "
+                    + "concurrent access")
+                .containsExactly("IOException");
+            assertThat(causeCounts.get("IOException").sum()).isEqualTo(threadCount);
+        }
+    }
 }
