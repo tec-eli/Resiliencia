@@ -96,6 +96,29 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_notThrowDateTimeException_when_clockIsNearInstantMaxAfterIdlePeriod() {
+        // A custom Clock (a documented extension point) may return an Instant near Instant.MAX.
+        // Instant.plus() throws DateTimeException (not ArithmeticException) once the result
+        // falls outside Instant's representable range; neither advanceWindow's nor tryAcquire's
+        // Instant.plus() calls may let that escape, mirroring CircuitBreaker.openDeadline().
+        // outcome() is documented to never throw, so this exercises that contract end to end.
+        var period = Duration.ofNanos(100);
+        var manualClock = new ManualClock(Instant.MAX.minus(period.multipliedBy(2)));
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, period).withClock(manualClock);
+        limiter.call(() -> "first");
+
+        // Idle for two periods, landing exactly on Instant.MAX: the closest a valid Clock can
+        // push the window boundary computation without itself overflowing.
+        manualClock.advance(period.multipliedBy(2));
+
+        assertThat(limiter.call(() -> "near instant max")).isEqualTo("near instant max");
+        var outcome = limiter.outcome(() -> "rejected in same window");
+        assertThat(outcome)
+                .isInstanceOfSatisfying(Outcome.Failure.class, f ->
+                        assertThat(f.cause()).isInstanceOf(RateLimiterException.class));
+    }
+
+    @Test
     void should_waitForNextWindow_when_maxWaitAllowsIt() {
         var manualClock = new ManualClock();
         var limiter = RateLimiter.<String>of("rate-limiter",1, PERIOD)
@@ -338,7 +361,15 @@ class RateLimiterPatternTest {
      * limiter sleeps, so waits complete instantly.
      */
     private static final class ManualClock implements Clock {
-        private Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        private Instant now;
+
+        ManualClock() {
+            this(Instant.parse("2026-01-01T00:00:00Z"));
+        }
+
+        ManualClock(Instant now) {
+            this.now = now;
+        }
 
         @Override
         public synchronized Instant instant() {

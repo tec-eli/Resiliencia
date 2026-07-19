@@ -10,6 +10,7 @@ import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -218,7 +219,7 @@ public final class RateLimiter<T> implements Resilient<T> {
     private AcquireOutcome tryAcquire() throws InterruptedException {
         // Clamp maxWait to prevent overflow in Instant.plus(); see Bulkhead for same pattern.
         var maxWaitClamped = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : maxWait;
-        var deadline = clock.instant().plus(maxWaitClamped);
+        var deadline = safePlus(clock.instant(), maxWaitClamped);
         var casRetries = 0;
         while (true) {
             Duration untilWindowEnd;
@@ -246,9 +247,18 @@ public final class RateLimiter<T> implements Resilient<T> {
             }
 
             // Window is full, calculate time until next window
-            untilWindowEnd = Duration.between(now, advanced.windowStart.plus(period));
+            Instant nextWindowStart;
+            try {
+                nextWindowStart = advanced.windowStart.plus(period);
+            } catch (DateTimeException | ArithmeticException e) {
+                // The next window's start overflows Instant's representable range (e.g. a
+                // custom Clock near Instant.MAX): it can never be reached, so reject
+                // immediately — no maxWait, however generous, could ever wait it out.
+                return AcquireOutcome.rejected(Duration.between(now, Instant.MAX));
+            }
+            untilWindowEnd = Duration.between(now, nextWindowStart);
 
-            if (clock.instant().plus(untilWindowEnd).isAfter(deadline)) {
+            if (safePlus(clock.instant(), untilWindowEnd).isAfter(deadline)) {
                 return AcquireOutcome.rejected(untilWindowEnd);
             }
             // Duration.toMillis() throws ArithmeticException on overflow for extreme values
@@ -274,17 +284,35 @@ public final class RateLimiter<T> implements Resilient<T> {
             // Clamp elapsed the same way maxWait is clamped in tryAcquire, then fall back to
             // resetting the window straight to `now` if periodsElapsed / the multiplied-back
             // duration still overflows — e.g. a sub-millisecond period left idle for years, where
-            // no single clamp constant covers every period/elapsed combination.
+            // no single clamp constant covers every period/elapsed combination. DateTimeException
+            // is also caught here: Instant.plus throws it (not ArithmeticException) when the
+            // result falls outside Instant's representable range, e.g. a custom Clock returning
+            // an Instant near Instant.MAX. Mirrors CircuitBreaker.openDeadline().
             var elapsedClamped = elapsed.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : elapsed;
             try {
                 var periodsElapsed = elapsedClamped.dividedBy(period);
                 var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
                 return new WindowState(newWindowStart, 0);
-            } catch (ArithmeticException e) {
+            } catch (DateTimeException | ArithmeticException e) {
                 return new WindowState(now, 0);
             }
         }
         return current;
+    }
+
+    /**
+     * Add {@code duration} to {@code instant}, clamped to {@link Instant#MAX} instead of letting
+     * {@code Instant.plus} throw when the result falls outside Instant's representable range —
+     * reachable via a custom Clock returning an Instant near Instant.MAX (e.g. a contrived
+     * clock, or genuine idle time measured against it). An unreachable deadline just means the
+     * wait is correctly never satisfied. Mirrors CircuitBreaker.openDeadline().
+     */
+    private static Instant safePlus(Instant instant, Duration duration) {
+        try {
+            return instant.plus(duration);
+        } catch (DateTimeException | ArithmeticException e) {
+            return Instant.MAX;
+        }
     }
 
     /**
