@@ -29,4 +29,13 @@ class RateLimiterCountersTest {
 
         assertThat(permitted).isNotEqualTo(rejected);
     }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a null name is accepted
+    // rather than rejected at construction.
+    void should_allowNullName_when_nameNotProvided() {
+        var call = new RateLimiterCounters.Call(null, RateLimiterCounters.Outcome.PERMITTED);
+
+        assertThat(call.name()).isNull();
+    }
 }

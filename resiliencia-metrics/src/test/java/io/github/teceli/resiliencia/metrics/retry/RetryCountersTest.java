@@ -60,4 +60,29 @@ class RetryCountersTest {
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
     }
+
+    @Test
+    void should_allowZeroTotalAttempts_when_valueIsInvalidForARealRetry() {
+        var success = new RetryCounters.Success("myRetry", 0);
+
+        assertThat(success.totalAttempts()).isZero();
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a negative totalAttempts —
+    // which cannot occur from real Retry usage — is still accepted rather than rejected.
+    void should_allowNegativeTotalAttempts_when_valueIsInvalidForARealRetry() {
+        var success = new RetryCounters.Success("myRetry", -1);
+
+        assertThat(success.totalAttempts()).isEqualTo(-1);
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a null name is accepted
+    // rather than rejected at construction.
+    void should_allowNullName_when_nameNotProvided() {
+        var success = new RetryCounters.Success(null, 3);
+
+        assertThat(success.name()).isNull();
+    }
 }

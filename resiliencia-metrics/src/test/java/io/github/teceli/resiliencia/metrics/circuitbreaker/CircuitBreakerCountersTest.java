@@ -58,4 +58,47 @@ class CircuitBreakerCountersTest {
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
     }
+
+    @Test
+    void should_allowZeroElapsed_when_callRecordedInstantly() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded("myCB", true, Duration.ZERO);
+
+        assertThat(callRecorded.elapsed()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a negative elapsed
+    // duration — which cannot occur from real CircuitBreaker timing — is still accepted rather
+    // than rejected.
+    void should_allowNegativeElapsed_when_valueIsInvalidForARealCall() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded("myCB", true, Duration.ofMillis(-5));
+
+        assertThat(callRecorded.elapsed()).isEqualTo(Duration.ofMillis(-5));
+    }
+
+    @Test
+    void should_allowZeroSuccessfulTestCalls_when_closedFromHalfOpenWithNoTestCalls() {
+        var closedFromHalfOpen = new CircuitBreakerCounters.ClosedFromHalfOpen("myCB", 0);
+
+        assertThat(closedFromHalfOpen.successfulTestCalls()).isZero();
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a negative count of
+    // successful test calls — which cannot occur from a real HalfOpen-to-Closed transition — is
+    // still accepted rather than rejected.
+    void should_allowNegativeSuccessfulTestCalls_when_valueIsInvalidForARealTransition() {
+        var closedFromHalfOpen = new CircuitBreakerCounters.ClosedFromHalfOpen("myCB", -1);
+
+        assertThat(closedFromHalfOpen.successfulTestCalls()).isEqualTo(-1);
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a null name is accepted
+    // rather than rejected at construction.
+    void should_allowNullName_when_nameNotProvided() {
+        var callRecorded = new CircuitBreakerCounters.CallRecorded(null, true, Duration.ofMillis(10));
+
+        assertThat(callRecorded.name()).isNull();
+    }
 }

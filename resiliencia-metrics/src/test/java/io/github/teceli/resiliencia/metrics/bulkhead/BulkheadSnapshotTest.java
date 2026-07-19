@@ -29,4 +29,29 @@ class BulkheadSnapshotTest {
 
         assertThat(withThree).isNotEqualTo(withFour);
     }
+
+    @Test
+    void should_allowZeroCount_when_noActiveCalls() {
+        var activeCalls = new BulkheadSnapshot.ActiveCalls("myBulkhead", 0);
+
+        assertThat(activeCalls.count()).isZero();
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a negative count — which
+    // cannot occur from real Bulkhead usage — is still accepted rather than rejected.
+    void should_allowNegativeCount_when_valueIsInvalidForARealBulkhead() {
+        var activeCalls = new BulkheadSnapshot.ActiveCalls("myBulkhead", -1);
+
+        assertThat(activeCalls.count()).isEqualTo(-1);
+    }
+
+    @Test
+    // Documents current behavior: the record performs no validation, so a null name is accepted
+    // rather than rejected at construction.
+    void should_allowNullName_when_nameNotProvided() {
+        var activeCalls = new BulkheadSnapshot.ActiveCalls(null, 4);
+
+        assertThat(activeCalls.name()).isNull();
+    }
 }
