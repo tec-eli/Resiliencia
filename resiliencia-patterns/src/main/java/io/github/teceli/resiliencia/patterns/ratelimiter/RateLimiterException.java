@@ -8,6 +8,11 @@ import java.time.Duration;
 /**
  * Thrown when a RateLimiter rejects a call because the current window's permits are used up
  * and no permit would become available within the configured maximum wait time.
+ *
+ * <p>The {@code name} carried by this exception is the rate limiter's own name, which must be a
+ * static, compile-time-known string — never request-derived or tenant-derived. It is used as a
+ * cardinality-bounded key/tag in metrics and logging; unbounded distinct names would cause
+ * unbounded memory growth in metrics backends.
  */
 public final class RateLimiterException extends ResilientException {
 

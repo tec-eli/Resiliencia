@@ -8,6 +8,11 @@ import java.time.Duration;
 /**
  * Thrown when a Bulkhead rejects a call because all permits are in use and no permit
  * became available within the configured maximum wait time.
+ *
+ * <p>The {@code name} carried by this exception is the bulkhead's own name, which must be a
+ * static, compile-time-known string — never request-derived or tenant-derived. It is used as a
+ * cardinality-bounded key/tag in metrics and logging; unbounded distinct names would cause
+ * unbounded memory growth in metrics backends.
  */
 public final class BulkheadFullException extends ResilientException {
 

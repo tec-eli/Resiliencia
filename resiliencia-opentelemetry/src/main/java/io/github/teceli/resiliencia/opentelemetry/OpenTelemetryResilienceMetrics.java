@@ -33,6 +33,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * are recorded according to the configured {@link DurationInstrumentationMode} — {@code SAFE}
  * (default, lock-free counter pair) or {@code DETAILED} (opt-in, {@code DoubleHistogram}, see that
  * enum's Javadoc for the pinning risk it accepts).
+ *
+ * <p>Every metric emitted here is tagged with the pattern instance's {@code name} (the
+ * {@code "name"} attribute key). That name must be a static, compile-time-known string — never
+ * request-derived or tenant-derived — since it becomes a cardinality-bounded attribute value in
+ * the OpenTelemetry SDK; unbounded distinct names would cause unbounded memory growth in the
+ * metrics backend.
  */
 public final class OpenTelemetryResilienceMetrics implements ResilienceMetrics {
     private static final AttributeKey<String> KEY_NAME = AttributeKey.stringKey("name");
