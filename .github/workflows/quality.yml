@@ -1,13 +1,15 @@
 name: Static Analysis
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
