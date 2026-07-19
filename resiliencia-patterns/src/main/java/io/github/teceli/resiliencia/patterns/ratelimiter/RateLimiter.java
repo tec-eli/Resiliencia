@@ -298,8 +298,8 @@ public final class RateLimiter<T> implements Resilient<T> {
     private WindowState advanceWindow(WindowState current, Instant now) {
         var elapsed = Duration.between(current.windowStart, now);
         if (elapsed.compareTo(period) >= 0) {
-            // See "Extreme values" in docs/architecture/patterns/rate-limiter.md for why this
-            // clamps and falls back to resetting the window straight to `now` on overflow.
+            // Clamp elapsed and fall back to resetting the window straight to `now` if the
+            // multiplied-back duration still overflows Instant's representable range.
             try {
                 var periodsElapsed = clampToMaxMillis(elapsed).dividedBy(period);
                 var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
@@ -313,8 +313,6 @@ public final class RateLimiter<T> implements Resilient<T> {
 
     /**
      * {@code instant + duration}, clamped to {@link Instant#MAX} instead of throwing on overflow.
-     * Mirrors {@code CircuitBreaker.openDeadline()}; see "Extreme values" in
-     * docs/architecture/patterns/rate-limiter.md.
      */
     private static Instant safePlus(Instant instant, Duration duration) {
         try {

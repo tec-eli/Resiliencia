@@ -97,7 +97,6 @@ class RateLimiterPatternTest {
 
     @Test
     void should_notThrowDateTimeException_when_clockIsNearInstantMaxAfterIdlePeriod() {
-        // See "Extreme values" in docs/architecture/patterns/rate-limiter.md.
         var period = Duration.ofNanos(100);
         var manualClock = new ManualClock(Instant.MAX.minus(period.multipliedBy(2)));
         var limiter = RateLimiter.<String>of("rate-limiter", 1, period).withClock(manualClock);
