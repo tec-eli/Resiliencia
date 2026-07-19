@@ -15,6 +15,22 @@ caller waits up to `maxWait`. If no permit becomes available within that window,
 
 `maxWait` of zero means reject immediately if no permit is available.
 
+### Extreme values
+
+`Instant` arithmetic (`plus`) throws `ArithmeticException` on `long` overflow and `DateTimeException` when the
+result falls outside `Instant`'s representable range — both reachable in practice: a huge `maxWait`, a period left
+idle for centuries, or a custom `Clock` (a documented extension point) returning an `Instant` near `Instant.MAX`.
+RateLimiter never lets either escape:
+
+- Durations that would overflow `Duration.toMillis()` are clamped to `Long.MAX_VALUE` millis first.
+- Any `Instant.plus` that would still overflow is either clamped to `Instant.MAX` (`safePlus`, used for deadlines —
+  an unreachable deadline just means the wait is correctly never satisfied) or treated as "unreachable, reject
+  immediately" (the next window's start, in `tryAcquire` — no `maxWait`, however generous, could wait that out) or
+  falls back to resetting the window straight to the current instant (`advanceWindow`, for idle periods so long that
+  even the clamped elapsed duration can't be multiplied back into a valid `Instant`).
+
+This mirrors `CircuitBreaker.openDeadline()`, which handles the same `Instant`-near-`Instant.MAX` case the same way.
+
 ---
 
 ## Configuration surface
