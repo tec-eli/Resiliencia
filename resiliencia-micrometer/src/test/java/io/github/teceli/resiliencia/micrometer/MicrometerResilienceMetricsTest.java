@@ -254,4 +254,49 @@ class MicrometerResilienceMetricsTest {
                 .tag("name", "myLimiter").gauge().value()).isEqualTo(7.0);
         }
     }
+
+    @Nested
+    class GaugeCacheBounding {
+        @Test
+        void should_notRegisterNewGauge_when_gaugeCacheBoundAlreadyReached() {
+            for (var i = 0; i < MicrometerResilienceMetrics.MAX_GAUGE_CACHE_ENTRIES; i++) {
+                metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkhead-" + i, i));
+            }
+            assertThat(registry.find(MetricNames.BULKHEAD_ACTIVE_CALLS).gauges())
+                .hasSize(MicrometerResilienceMetrics.MAX_GAUGE_CACHE_ENTRIES);
+
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("one-too-many", 1));
+
+            assertThat(registry.find(MetricNames.BULKHEAD_ACTIVE_CALLS).gauges())
+                .as("once the cache bound is reached, a previously-unseen name/metric combination "
+                    + "should not register a new gauge")
+                .hasSize(MicrometerResilienceMetrics.MAX_GAUGE_CACHE_ENTRIES);
+            assertThat(registry.find(MetricNames.BULKHEAD_ACTIVE_CALLS).tag("name", "one-too-many").gauge())
+                .isNull();
+        }
+
+        @Test
+        void should_keepUpdatingAlreadyRegisteredGauge_when_gaugeCacheBoundAlreadyReached() {
+            for (var i = 0; i < MicrometerResilienceMetrics.MAX_GAUGE_CACHE_ENTRIES; i++) {
+                metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkhead-" + i, i));
+            }
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("one-too-many", 1));
+
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkhead-0", 99));
+
+            assertThat(registry.get(MetricNames.BULKHEAD_ACTIVE_CALLS)
+                .tag("name", "bulkhead-0").gauge().value())
+                .as("a gauge registered before the bound was reached must keep updating afterwards")
+                .isEqualTo(99.0);
+        }
+
+        @Test
+        void should_boundEachMetricNameIndependently_when_multipleGaugeMetricsApproachTheBound() {
+            metrics.observe(new BulkheadSnapshot.ActiveCalls("bulkhead", 1));
+            metrics.observe(new RateLimiterSnapshot.RemainingPermits("limiter", 5));
+
+            assertThat(registry.find(MetricNames.BULKHEAD_ACTIVE_CALLS).gauges()).hasSize(1);
+            assertThat(registry.find(MetricNames.RATE_LIMITER_REMAINING_PERMITS).gauges()).hasSize(1);
+        }
+    }
 }

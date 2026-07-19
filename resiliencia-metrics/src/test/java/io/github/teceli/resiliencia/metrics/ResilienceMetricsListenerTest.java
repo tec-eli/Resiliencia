@@ -401,6 +401,58 @@ class ResilienceMetricsListenerTest {
 
             verify(metrics, times(4)).observe(any(Counters.class));
         }
+
+        @Test
+        void should_useAllowlistedAncestorName_when_thrownExceptionIsSubtypeOfAllowlistedClass() {
+            var allowlist = Set.<Class<? extends Throwable>>of(java.io.IOException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new java.io.FileNotFoundException("missing");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("subtype matching should tag with the allowlisted ancestor's name, not the thrown "
+                    + "exception's own runtime class name, so cardinality stays bounded by allowlist size")
+                .isEqualTo("IOException");
+        }
+
+        @Test
+        void should_useMostSpecificAllowlistedAncestor_when_thrownExceptionMatchesMultipleAllowlistedAncestors() {
+            var allowlist = Set.<Class<? extends Throwable>>of(RuntimeException.class, IllegalStateException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new IllegalStateException("test");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("the most specific matching allowlisted ancestor should be used, not the broader one")
+                .isEqualTo("IllegalStateException");
+        }
+
+        @Test
+        void should_useBucket_other_when_thrownExceptionIsSupertypeOfAllowlistedClass() {
+            var allowlist = Set.<Class<? extends Throwable>>of(IllegalStateException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new RuntimeException("test");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("a broader exception thrown where only a narrower subtype is allowlisted should not match")
+                .isEqualTo("other");
+        }
     }
 
     @Nested
