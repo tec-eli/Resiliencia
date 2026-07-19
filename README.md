@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/java-21%2B-orange.svg)](https://openjdk.org/projects/jdk/21/)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.teceli/resiliencia-core.svg)](https://central.sonatype.com/artifact/io.github.teceli/resiliencia-core)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-core.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-core)
 [![Build & Test](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/build.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tec-eli_Resiliencia&metric=alert_status&token=18f4fe092678f4960cd01cfd2b44f5abc314b620)](https://sonarcloud.io/summary/new_code?id=tec-eli_Resiliencia)
 [![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
@@ -30,7 +30,7 @@ designed around modern Java idioms: sealed interfaces, records, and pattern matc
 
 ```xml
 <dependency>
-    <groupId>io.github.teceli</groupId>
+    <groupId>io.github.tec-eli</groupId>
     <artifactId>resiliencia-compose</artifactId>
     <version>1.0.0</version>
 </dependency>
