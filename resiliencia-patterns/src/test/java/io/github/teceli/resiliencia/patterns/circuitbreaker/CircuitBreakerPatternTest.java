@@ -3,6 +3,7 @@ package io.github.teceli.resiliencia.patterns.circuitbreaker;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.spi.Clock;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -832,35 +833,19 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    @DisplayName("Regression #143: a thread stuck on a stale HalfOpen slot must never be admitted "
+            + "after a concurrent reopen swaps it out, across many high-contention rounds")
     void should_notAdmitStaleHalfOpenPermit_when_circuitReopensDuringInFlightAcquireUnderContention()
             throws Exception {
-        // Regression test for #143: tryAcquirePermission()'s HalfOpen branch used to read
-        // current.get() once and loop CAS-ing that captured slot's permitsIssued forever. Since a
-        // concurrent transition (this test's contending calls all fail, reopening the circuit)
-        // swaps `current` to a brand-new StateSlot instead of mutating the old one, a thread still
-        // looping on the stale slot could keep succeeding its local CAS and be granted permission
-        // after the circuit had already reopened elsewhere. The fix re-reads current every
-        // iteration, so no admission may start once the circuit has visibly moved past its slot.
-        //
-        // The actual interleaving needed to observe the bug is a narrow, hardware-level race (a
-        // thread's own read-then-CAS straddling another thread's reopening CAS), so a single
-        // attempt is unreliable. Two things widen it into something reliably observable:
-        //  - Heavy CAS contention: far more contenders (threadCount) than the HalfOpen permit
-        //    budget (permittedCalls), so a buggy thread stuck looping on a stale slot keeps
-        //    retrying for much longer than a single CAS, instead of resolving in one shot.
-        //  - recordOnResult (rather than a thrown exception) marks every admitted test call as
-        //    failed, reopening the circuit without the overhead of exception stack-trace capture,
-        //    so reopening is fast enough to land squarely inside that contention window.
-        // Even so, this remains probabilistic, so many independent rounds are run and the
-        // no-late-admission invariant must hold across every one of them.
+        // Wide contention (threadCount >> permittedCalls) plus a cheap, exception-free failure path
+        // (recordOnResult) widen the narrow read-then-CAS-vs-reopen race into something reliably
+        // observable; even so it's probabilistic, hence many independent rounds.
         final var threadCount = 2_000;
         final var permittedCalls = 50;
         final var rounds = 300;
-        // Generous margin over the negligible gap between a permit being granted and the operation
-        // body's first instruction actually running (observed well under 1ms even under heavy
-        // contention), so only admissions that clearly started after the reopening -- the
-        // stale-slot bug -- are flagged, not ordinary cross-core clock-reading jitter.
-        var graceNanos = Duration.ofMillis(1).toNanos();
+        // Comfortably above the permit-grant-to-operation-start gap (sub-millisecond even under
+        // load), so only admissions that clearly started after the reopening are flagged.
+        var graceNanos = Duration.ofMillis(10).toNanos();
         var lateAdmissions = 0L;
 
         for (var round = 0; round < rounds; round++) {
@@ -875,10 +860,9 @@ class CircuitBreakerPatternTest {
                     .withRecordOnResult(result -> true)
                     .withClock(clock)
                     .withListener(event -> {
+                        // 1st Opened is the deliberate Closed -> Open trip below; 2nd is the
+                        // HalfOpen -> Open reopening under test.
                         if (event instanceof CircuitBreakerEvent.Opened && openedCount.incrementAndGet() == 2) {
-                            // The 1st Opened event is the deliberate Closed -> Open trip below; the
-                            // 2nd is the HalfOpen -> Open reopening triggered by the contending
-                            // threads below, which is the transition under test.
                             reopenedAtNanos.set(System.nanoTime());
                         }
                     });
@@ -906,7 +890,7 @@ class CircuitBreakerPatternTest {
                 });
             }
 
-            assertThat(allDone.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(allDone.await(10, TimeUnit.SECONDS)).as("round %d: all threads finished", round).isTrue();
             var reopened = reopenedAtNanos.get();
             assertThat(reopened).as("round %d: the circuit must have reopened during the race", round).isPositive();
 

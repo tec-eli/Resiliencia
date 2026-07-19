@@ -352,12 +352,9 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 yield tryAcquirePermission();
             }
             case CircuitState.HalfOpen halfOpen -> {
+                // Re-reads current every iteration and re-validates the permit CAS against it,
+                // so a stale slot from before a concurrent transition can never grant a permit.
                 while (true) {
-                    // Re-read current on every iteration instead of closing over the slot
-                    // captured above: a concurrent transition (another thread reopening or
-                    // closing the circuit) swaps current to a brand-new StateSlot rather than
-                    // mutating this one, so a stale slot reference must never keep granting
-                    // permits after that. Mirrors RateLimiter.tryAcquire()'s CAS loop.
                     var currentSlot = current.get();
                     if (!(currentSlot.publicState instanceof CircuitState.HalfOpen)) {
                         yield tryAcquirePermission();
@@ -368,12 +365,6 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                             clock.instant(), name, CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
                         yield CircuitBreakerOpenException.forHalfOpenState(name);
                     }
-                    // permitsIssued lives on currentSlot, not on current itself, so incrementing it
-                    // does not by itself prove current still points at currentSlot: a transition
-                    // could have swapped current away in between. Re-checking current == currentSlot
-                    // right after the CAS closes that gap -- if it no longer matches, this grant was
-                    // decided against a slot the circuit had already moved past, so it is discarded
-                    // and retried against the fresh state instead of being honored.
                     if (currentSlot.permitsIssued.compareAndSet(issued, issued + 1)
                             && current.get() == currentSlot) {
                         yield null;

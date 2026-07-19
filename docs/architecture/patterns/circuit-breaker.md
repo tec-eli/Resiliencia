@@ -73,6 +73,23 @@ that has already been decided. Where the Closed side is permissive by design (po
 unconditionally), the Open side is restrictive by design (post-transition calls are rejected outright) — both sides
 are just the current state, freshly re-checked at admission time, doing what it always does.
 
+### CAS discipline in the HalfOpen admission loop
+
+`tryAcquirePermission()`'s HalfOpen branch spins a `while (true)` loop that CASes a permit counter and must never
+grant one against a state the circuit has already moved past. To guarantee that, the loop re-reads `current` (the
+`AtomicReference<StateSlot>` holding both the public `CircuitState` and its HalfOpen counters) on *every* iteration
+and re-validates it is still HalfOpen, rather than closing over the slot captured once before the loop started — a
+concurrent transition swaps `current` to a brand-new `StateSlot` instead of mutating the old one, so looping on a
+captured reference would keep granting permits against a slot the circuit had already reopened or closed past.
+Mirrors `RateLimiter.tryAcquire()`'s CAS loop, which re-fetches its own state every iteration for the same reason.
+
+A permit's counter CAS and the check that `current` still points at that same slot are two separate reads, so
+succeeding the counter CAS does not by itself prove the slot is still current — a transition can land in the gap
+between them. The loop closes that gap by re-reading `current` immediately after the counter CAS and only yielding
+the permit if it still matches the slot the CAS was performed against; otherwise the grant is discarded (the
+counter was incremented on a slot already abandoned, which is harmless since nothing reads it again) and the loop
+retries against fresh state.
+
 ### Rate thresholds
 
 Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
