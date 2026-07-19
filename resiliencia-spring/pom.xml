@@ -22,6 +22,8 @@
     <properties>
         <!-- Skeleton module (module-info.java only, no implementation yet); not ready to publish. -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- No public/protected classes yet, so javadoc:jar has nothing to document. -->
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>

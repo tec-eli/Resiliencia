@@ -31,8 +31,9 @@ jobs:
       - name: Install
         run: mvn -B install -DskipTests
 
-      # Report-only: -Dossindex.fail=false surfaces vulnerable dependencies without failing the
-      # build. Invoked by full plugin coordinates so no module's pom.xml needs to depend on it.
+      # Fails the build on a known CVE. Authenticated via OSSINDEX_USER/OSSINDEX_TOKEN (repo
+      # secrets), so this gates merges on trustworthy, non-rate-limited results. Invoked by full
+      # plugin coordinates so no module's pom.xml needs to depend on it.
       - name: OSS Index audit
         env:
           OSSINDEX_USER: ${{ secrets.OSSINDEX_USER }}
@@ -40,4 +41,4 @@ jobs:
         run: >
           mvn -B org.sonatype.ossindex.maven:ossindex-maven-plugin:audit
           -Dossindex.authId=ossindex
-          -Dossindex.fail=false
+          -Dossindex.fail=true
