@@ -9,9 +9,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -827,6 +829,94 @@ class CircuitBreakerPatternTest {
         // permittedCalls can succeed under heavy contention. This is deliberate design, not a bug.
         assertThat(successCount).isGreaterThanOrEqualTo(permittedCalls);
         assertThat(successCount + rejectedCount).isEqualTo(threadCount);
+    }
+
+    @Test
+    void should_notAdmitStaleHalfOpenPermit_when_circuitReopensDuringInFlightAcquireUnderContention()
+            throws Exception {
+        // Regression test for #143: tryAcquirePermission()'s HalfOpen branch used to read
+        // current.get() once and loop CAS-ing that captured slot's permitsIssued forever. Since a
+        // concurrent transition (this test's contending calls all fail, reopening the circuit)
+        // swaps `current` to a brand-new StateSlot instead of mutating the old one, a thread still
+        // looping on the stale slot could keep succeeding its local CAS and be granted permission
+        // after the circuit had already reopened elsewhere. The fix re-reads current every
+        // iteration, so no admission may start once the circuit has visibly moved past its slot.
+        //
+        // The actual interleaving needed to observe the bug is a narrow, hardware-level race (a
+        // thread's own read-then-CAS straddling another thread's reopening CAS), so a single
+        // attempt is unreliable. Two things widen it into something reliably observable:
+        //  - Heavy CAS contention: far more contenders (threadCount) than the HalfOpen permit
+        //    budget (permittedCalls), so a buggy thread stuck looping on a stale slot keeps
+        //    retrying for much longer than a single CAS, instead of resolving in one shot.
+        //  - recordOnResult (rather than a thrown exception) marks every admitted test call as
+        //    failed, reopening the circuit without the overhead of exception stack-trace capture,
+        //    so reopening is fast enough to land squarely inside that contention window.
+        // Even so, this remains probabilistic, so many independent rounds are run and the
+        // no-late-admission invariant must hold across every one of them.
+        final var threadCount = 2_000;
+        final var permittedCalls = 50;
+        final var rounds = 300;
+        // Generous margin over the negligible gap between a permit being granted and the operation
+        // body's first instruction actually running (observed well under 1ms even under heavy
+        // contention), so only admissions that clearly started after the reopening -- the
+        // stale-slot bug -- are flagged, not ordinary cross-core clock-reading jitter.
+        var graceNanos = Duration.ofMillis(1).toNanos();
+        var lateAdmissions = 0L;
+
+        for (var round = 0; round < rounds; round++) {
+            var clock = new ManualClock();
+            var openedCount = new AtomicInteger(0);
+            var reopenedAtNanos = new AtomicLong(-1);
+            var circuitBreaker = CircuitBreaker.<String>of("stale-slot-test")
+                    .withSlidingWindowSize(1)
+                    .withFailureRateThreshold(0.5)
+                    .withWaitDurationInOpenState(WAIT_DURATION)
+                    .withPermittedCallsInHalfOpenState(permittedCalls)
+                    .withRecordOnResult(result -> true)
+                    .withClock(clock)
+                    .withListener(event -> {
+                        if (event instanceof CircuitBreakerEvent.Opened && openedCount.incrementAndGet() == 2) {
+                            // The 1st Opened event is the deliberate Closed -> Open trip below; the
+                            // 2nd is the HalfOpen -> Open reopening triggered by the contending
+                            // threads below, which is the transition under test.
+                            reopenedAtNanos.set(System.nanoTime());
+                        }
+                    });
+            circuitBreaker.outcome(CircuitBreakerPatternTest::boom); // Closed -> Open
+            clock.advance(WAIT_DURATION); // eligible for Open -> HalfOpen; clock never advances
+                                           // again, so the reopened episode's deadline is never hit.
+
+            var admissionNanos = new ConcurrentLinkedQueue<Long>();
+            var allReady = new CountDownLatch(threadCount);
+            var allDone = new CountDownLatch(threadCount);
+            for (var i = 0; i < threadCount; i++) {
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        allReady.countDown();
+                        allReady.await(); // Synchronize all threads to maximize contention
+                        circuitBreaker.outcome(() -> {
+                            admissionNanos.add(System.nanoTime());
+                            return "boom"; // recordOnResult marks this as failed, reopening the circuit
+                        });
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        allDone.countDown();
+                    }
+                });
+            }
+
+            assertThat(allDone.await(10, TimeUnit.SECONDS)).isTrue();
+            var reopened = reopenedAtNanos.get();
+            assertThat(reopened).as("round %d: the circuit must have reopened during the race", round).isPositive();
+
+            lateAdmissions += admissionNanos.stream().filter(nanos -> nanos > reopened + graceNanos).count();
+        }
+
+        assertThat(lateAdmissions)
+                .as("no HalfOpen test call may be admitted after the circuit has already reopened "
+                        + "onto a new StateSlot, across %d contention rounds", rounds)
+                .isZero();
     }
 
     /**
