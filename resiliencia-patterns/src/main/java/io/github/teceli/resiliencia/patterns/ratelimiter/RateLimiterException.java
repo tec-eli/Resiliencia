@@ -4,6 +4,7 @@ import io.github.teceli.resiliencia.core.api.ResilientException;
 
 import java.io.Serial;
 import java.time.Duration;
+import java.util.Objects;
 
 /**
  * Thrown when a RateLimiter rejects a call because the current window's permits are used up
@@ -25,8 +26,10 @@ public final class RateLimiterException extends ResilientException {
     private final Duration maxWait;
 
     public RateLimiterException(String name, int limit, Duration period, Duration maxWait) {
-        super("Rate limiter '" + name + "' exceeded: " + limit + " calls per " + period
-                + (maxWait.isZero() ? "" : ", no permit would become available within " + maxWait));
+        super("Rate limiter '" + Objects.requireNonNull(name, "name must not be null") + "' exceeded: "
+                + limit + " calls per " + Objects.requireNonNull(period, "period must not be null")
+                + (Objects.requireNonNull(maxWait, "maxWait must not be null").isZero()
+                        ? "" : ", no permit would become available within " + maxWait));
         this.name = name;
         this.limit = limit;
         this.period = period;

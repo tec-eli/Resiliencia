@@ -265,8 +265,9 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
             return Optional.of(new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED));
         }
 
-        // Re-check deadline after sleep: if it passed, stop immediately without attempting
-        // another operation, in line with the promise in docs/patterns/retry.md:62-64
+        // Re-check deadline after sleep: if it passed, stop immediately without attempting another
+        // operation — the overall deadline bounds total time spent, so a wait that itself crosses
+        // the deadline must not be followed by yet another attempt.
         if (deadlineExceeded(startInstant)) {
             return Optional.of(exhausted(attempt, e));
         }
