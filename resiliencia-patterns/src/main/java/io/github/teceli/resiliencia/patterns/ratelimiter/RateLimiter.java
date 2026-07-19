@@ -10,11 +10,13 @@ import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -216,47 +218,72 @@ public final class RateLimiter<T> implements Resilient<T> {
      * deadline can no longer be met.
      */
     private AcquireOutcome tryAcquire() throws InterruptedException {
-        // Clamp maxWait to prevent overflow in Instant.plus(); see Bulkhead for same pattern.
-        var maxWaitClamped = maxWait.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : maxWait;
-        var deadline = clock.instant().plus(maxWaitClamped);
+        var deadline = safePlus(clock.instant(), clampToMaxMillis(maxWait));
         var casRetries = 0;
         while (true) {
-            Duration untilWindowEnd;
             var now = clock.instant();
-
-            // Read current state and attempt to acquire a permit via CAS loop
-            WindowState current = state.get();
+            var current = state.get();
             var advanced = advanceWindow(current, now);
+
             if (advanced.used < limit) {
-                // Try to acquire: increment used
-                var newState = new WindowState(advanced.windowStart, advanced.used + 1);
-                if (state.compareAndSet(current, newState)) {
-                    // Success: acquired a permit
-                    return AcquireOutcome.acquired(limit - newState.used);
+                var acquired = attemptPermit(current, advanced);
+                if (acquired.isPresent()) {
+                    return acquired.get();
                 }
-                // CAS failed: another thread updated the window concurrently. Back off briefly
-                // instead of spinning tightly, then retry the loop.
-                casRetries++;
-                if (casRetries <= CAS_SPIN_RETRY_THRESHOLD) {
-                    Thread.onSpinWait();
-                } else {
-                    Thread.yield();
-                }
+                casRetries = backOff(casRetries);
                 continue;
             }
 
-            // Window is full, calculate time until next window
-            untilWindowEnd = Duration.between(now, advanced.windowStart.plus(period));
-
-            if (clock.instant().plus(untilWindowEnd).isAfter(deadline)) {
-                return AcquireOutcome.rejected(untilWindowEnd);
+            var outcome = awaitNextWindow(now, advanced, deadline);
+            if (outcome.isPresent()) {
+                return outcome.get();
             }
-            // Duration.toMillis() throws ArithmeticException on overflow for extreme values
-            // clamp to Long.MAX_VALUE instead of letting that escape.
-            var untilWindowEndMillis =
-                    untilWindowEnd.compareTo(MAX_MILLIS_DURATION) > 0 ? Long.MAX_VALUE : untilWindowEnd.toMillis();
-            clock.sleep(Math.max(1, untilWindowEndMillis));
         }
+    }
+
+    /** CAS {@code current} to one more used permit in {@code advanced}'s window; empty on CAS loss. */
+    private Optional<AcquireOutcome> attemptPermit(WindowState current, WindowState advanced) {
+        var newState = new WindowState(advanced.windowStart, advanced.used + 1);
+        if (state.compareAndSet(current, newState)) {
+            return Optional.of(AcquireOutcome.acquired(limit - newState.used));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Back off after a CAS loss under concurrent contention: spin briefly, then escalate to
+     * yielding. Returns the incremented retry count.
+     */
+    private static int backOff(int casRetries) {
+        var retries = casRetries + 1;
+        if (retries <= CAS_SPIN_RETRY_THRESHOLD) {
+            Thread.onSpinWait();
+        } else {
+            Thread.yield();
+        }
+        return retries;
+    }
+
+    /**
+     * The current window is full: reject if the next window is unreachable (see {@link #safePlus})
+     * or falls past {@code deadline}; otherwise sleep until it opens and return empty so the
+     * caller retries.
+     */
+    private Optional<AcquireOutcome> awaitNextWindow(Instant now, WindowState advanced, Instant deadline)
+            throws InterruptedException {
+        Instant nextWindowStart;
+        try {
+            nextWindowStart = advanced.windowStart.plus(period);
+        } catch (DateTimeException | ArithmeticException e) {
+            return Optional.of(AcquireOutcome.rejected(Duration.between(now, Instant.MAX)));
+        }
+        var untilWindowEnd = Duration.between(now, nextWindowStart);
+
+        if (safePlus(clock.instant(), untilWindowEnd).isAfter(deadline)) {
+            return Optional.of(AcquireOutcome.rejected(untilWindowEnd));
+        }
+        clock.sleep(Math.max(1, clampToMaxMillis(untilWindowEnd).toMillis()));
+        return Optional.empty();
     }
 
     /**
@@ -271,20 +298,33 @@ public final class RateLimiter<T> implements Resilient<T> {
     private WindowState advanceWindow(WindowState current, Instant now) {
         var elapsed = Duration.between(current.windowStart, now);
         if (elapsed.compareTo(period) >= 0) {
-            // Clamp elapsed the same way maxWait is clamped in tryAcquire, then fall back to
-            // resetting the window straight to `now` if periodsElapsed / the multiplied-back
-            // duration still overflows — e.g. a sub-millisecond period left idle for years, where
-            // no single clamp constant covers every period/elapsed combination.
-            var elapsedClamped = elapsed.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : elapsed;
+            // Clamp elapsed and fall back to resetting the window straight to `now` if the
+            // multiplied-back duration still overflows Instant's representable range.
             try {
-                var periodsElapsed = elapsedClamped.dividedBy(period);
+                var periodsElapsed = clampToMaxMillis(elapsed).dividedBy(period);
                 var newWindowStart = current.windowStart.plus(period.multipliedBy(periodsElapsed));
                 return new WindowState(newWindowStart, 0);
-            } catch (ArithmeticException e) {
+            } catch (DateTimeException | ArithmeticException e) {
                 return new WindowState(now, 0);
             }
         }
         return current;
+    }
+
+    /**
+     * {@code instant + duration}, clamped to {@link Instant#MAX} instead of throwing on overflow.
+     */
+    private static Instant safePlus(Instant instant, Duration duration) {
+        try {
+            return instant.plus(duration);
+        } catch (DateTimeException | ArithmeticException e) {
+            return Instant.MAX;
+        }
+    }
+
+    /** Clamps {@code duration} to {@link #MAX_MILLIS_DURATION} so {@code toMillis()} cannot overflow. */
+    private static Duration clampToMaxMillis(Duration duration) {
+        return duration.compareTo(MAX_MILLIS_DURATION) > 0 ? MAX_MILLIS_DURATION : duration;
     }
 
     /**

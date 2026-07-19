@@ -75,6 +75,14 @@
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
         <central-publishing-maven-plugin.version>0.10.0</central-publishing-maven-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+
+        <!--
+            resiliencia-examples and resiliencia-stress carry no unit tests by design (see their
+            jacoco.skip properties): examples is illustrative usage code, stress is a jcstress
+            harness. Without this, SonarCloud counts their source lines as uncovered, dragging
+            down the coverage metric for modules that were never meant to have coverage.
+        -->
+        <sonar.coverage.exclusions>resiliencia-examples/src/main/**,resiliencia-stress/src/main/**</sonar.coverage.exclusions>
     </properties>
 
     <dependencyManagement>
