@@ -231,6 +231,7 @@ public final class RateLimiter<T> implements Resilient<T> {
                     return acquired.get();
                 }
                 casRetries = backOff(casRetries);
+                checkNotInterruptedWhileSpinning();
                 continue;
             }
 
@@ -248,6 +249,18 @@ public final class RateLimiter<T> implements Resilient<T> {
             return Optional.of(AcquireOutcome.acquired(limit - newState.used));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Throws if this thread has been interrupted while spinning in the CAS-retry back-off loop,
+     * so a spinning waiter notices interruption instead of burning CPU until the CAS eventually
+     * succeeds. Clears the interrupt status as a side effect, same as {@link Thread#sleep}; the
+     * caller restores it via {@code Thread.currentThread().interrupt()} once it catches this.
+     */
+    private static void checkNotInterruptedWhileSpinning() throws InterruptedException {
+        if (Thread.interrupted()) {
+            throw new InterruptedException("Interrupted while spinning for a rate limiter permit");
+        }
     }
 
     /**

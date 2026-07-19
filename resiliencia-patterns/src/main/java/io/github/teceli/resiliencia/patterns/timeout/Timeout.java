@@ -121,7 +121,7 @@ public record Timeout<T>(String name, Duration timeout, boolean cancelOnTimeout,
         var result = new AtomicReference<Outcome<T>>();
         var error = new AtomicReference<Error>();
         var timedOut = new AtomicBoolean(false);
-        var worker = Thread.ofVirtual().name("resiliencia-timeout").start(() -> {
+        var worker = Thread.ofVirtual().name(TimeoutThreadNaming.next()).start(() -> {
             try {
                 result.set(new Outcome.Success<>(operation.execute()));
                 emitAbandonedSuccess(timedOut.get());

@@ -5,6 +5,8 @@ import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,8 +15,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -298,6 +302,42 @@ class RateLimiterPatternTest {
                 .as("above the spin threshold, backOff escalates to Thread.yield() but still "
                         + "returns the incremented retry count")
                 .isEqualTo(threshold + 1);
+    }
+
+    @Test
+    void should_throwInterruptedException_when_checkedWhileThreadIsInterrupted() throws Exception {
+        // checkNotInterruptedWhileSpinning() is private, invoked directly via reflection since
+        // real CAS contention cannot deterministically guarantee a spinning thread observes its
+        // own interrupt at a given point in time.
+        var checkMethod = RateLimiter.class.getDeclaredMethod("checkNotInterruptedWhileSpinning");
+        checkMethod.setAccessible(true);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> invokeUnwrapped(checkMethod))
+                    .isInstanceOf(InterruptedException.class);
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("the check clears the interrupt status, same as Thread.sleep")
+                    .isFalse();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void should_notThrow_when_checkedWhileThreadIsNotInterrupted() throws Exception {
+        var checkMethod = RateLimiter.class.getDeclaredMethod("checkNotInterruptedWhileSpinning");
+        checkMethod.setAccessible(true);
+
+        assertThatCode(() -> invokeUnwrapped(checkMethod)).doesNotThrowAnyException();
+    }
+
+    private static void invokeUnwrapped(Method method) throws Throwable {
+        try {
+            method.invoke(null);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     @Test
