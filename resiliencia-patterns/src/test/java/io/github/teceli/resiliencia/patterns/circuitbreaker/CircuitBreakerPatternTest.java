@@ -3,15 +3,18 @@ package io.github.teceli.resiliencia.patterns.circuitbreaker;
 import io.github.teceli.resiliencia.core.api.Outcome;
 import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.spi.Clock;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -827,6 +830,70 @@ class CircuitBreakerPatternTest {
         // permittedCalls can succeed under heavy contention. This is deliberate design, not a bug.
         assertThat(successCount).isGreaterThanOrEqualTo(permittedCalls);
         assertThat(successCount + rejectedCount).isEqualTo(threadCount);
+    }
+
+    @Test
+    @DisplayName("rejects any HalfOpen admission that starts after a concurrent reopen, "
+            + "across many high-contention rounds")
+    void should_notAdmitStaleHalfOpenPermit_when_circuitReopensDuringInFlightAcquireUnderContention()
+            throws Exception {
+        final var threadCount = 2_000;
+        final var permittedCalls = 50;
+        final var rounds = 300;
+        var graceNanos = Duration.ofMillis(10).toNanos();
+        var lateAdmissions = 0L;
+
+        for (var round = 0; round < rounds; round++) {
+            var clock = new ManualClock();
+            var openedCount = new AtomicInteger(0);
+            var reopenedAtNanos = new AtomicLong(-1);
+            var circuitBreaker = CircuitBreaker.<String>of("stale-slot-test")
+                    .withSlidingWindowSize(1)
+                    .withFailureRateThreshold(0.5)
+                    .withWaitDurationInOpenState(WAIT_DURATION)
+                    .withPermittedCallsInHalfOpenState(permittedCalls)
+                    .withRecordOnResult(result -> true)
+                    .withClock(clock)
+                    .withListener(event -> {
+                        if (event instanceof CircuitBreakerEvent.Opened && openedCount.incrementAndGet() == 2) {
+                            reopenedAtNanos.set(System.nanoTime());
+                        }
+                    });
+            circuitBreaker.outcome(CircuitBreakerPatternTest::boom); // Closed -> Open
+            clock.advance(WAIT_DURATION); // eligible for Open -> HalfOpen; clock never advances
+                                           // again, so the reopened episode's deadline is never hit.
+
+            var admissionNanos = new ConcurrentLinkedQueue<Long>();
+            var allReady = new CountDownLatch(threadCount);
+            var allDone = new CountDownLatch(threadCount);
+            for (var i = 0; i < threadCount; i++) {
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        allReady.countDown();
+                        allReady.await(); // Synchronize all threads to maximize contention
+                        circuitBreaker.outcome(() -> {
+                            admissionNanos.add(System.nanoTime());
+                            return "boom"; // recordOnResult marks this as failed, reopening the circuit
+                        });
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        allDone.countDown();
+                    }
+                });
+            }
+
+            assertThat(allDone.await(10, TimeUnit.SECONDS)).as("round %d: all threads finished", round).isTrue();
+            var reopened = reopenedAtNanos.get();
+            assertThat(reopened).as("round %d: the circuit must have reopened during the race", round).isPositive();
+
+            lateAdmissions += admissionNanos.stream().filter(nanos -> nanos > reopened + graceNanos).count();
+        }
+
+        assertThat(lateAdmissions)
+                .as("no HalfOpen test call may be admitted after the circuit has already reopened "
+                        + "onto a new StateSlot, across %d contention rounds", rounds)
+                .isZero();
     }
 
     /**

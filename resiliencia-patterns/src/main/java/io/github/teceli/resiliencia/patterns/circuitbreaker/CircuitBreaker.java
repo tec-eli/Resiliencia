@@ -352,14 +352,21 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 yield tryAcquirePermission();
             }
             case CircuitState.HalfOpen halfOpen -> {
+                // Re-reads current every iteration and re-validates the permit CAS against it,
+                // so a stale slot from before a concurrent transition can never grant a permit.
                 while (true) {
-                    var issued = slot.permitsIssued.get();
+                    var currentSlot = current.get();
+                    if (!(currentSlot.publicState instanceof CircuitState.HalfOpen)) {
+                        yield tryAcquirePermission();
+                    }
+                    var issued = currentSlot.permitsIssued.get();
                     if (issued >= permittedCallsInHalfOpenState) {
                         emit(new CircuitBreakerEvent.Rejected(
                             clock.instant(), name, CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
                         yield CircuitBreakerOpenException.forHalfOpenState(name);
                     }
-                    if (slot.permitsIssued.compareAndSet(issued, issued + 1)) {
+                    if (currentSlot.permitsIssued.compareAndSet(issued, issued + 1)
+                            && current.get() == currentSlot) {
                         yield null;
                     }
                 }
