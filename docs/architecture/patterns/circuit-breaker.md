@@ -90,6 +90,21 @@ the permit if it still matches the slot the CAS was performed against; otherwise
 counter was incremented on a slot already abandoned, which is harmless since nothing reads it again) and the loop
 retries against fresh state.
 
+`CircuitBreakerPatternTest.should_notAdmitStaleHalfOpenPermit_when_circuitReopensDuringInFlightAcquireUnderContention`
+guards this loop. The actual bug is a narrow, hardware-level interleaving (a thread's own read-then-CAS straddling
+another thread's reopening CAS), so a single attempt would rarely observe it; the test widens that window and runs
+many independent rounds since it stays probabilistic even so:
+
+- `threadCount` (2000) far exceeds `permittedCalls` (50), so a thread stuck looping on a stale slot keeps retrying
+  long enough to land inside the race window instead of resolving in one CAS.
+- `withRecordOnResult` marks every admitted call as failed without throwing, so reopening happens fast enough — no
+  exception stack-trace capture — to still be racing the in-flight admissions.
+- `graceNanos` (10ms) is a generous margin over the sub-millisecond gap between a permit being granted and the
+  call body's first instruction running, so only admissions that clearly started after the reopening count as
+  stale-slot admissions rather than ordinary scheduling jitter.
+- The listener's *second* `Opened` event is the reopening under test; the first is the deliberate Closed → Open
+  trip that sets the scenario up.
+
 ### Rate thresholds
 
 Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.

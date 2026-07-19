@@ -833,18 +833,13 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
-    @DisplayName("Regression #143: a thread stuck on a stale HalfOpen slot must never be admitted "
-            + "after a concurrent reopen swaps it out, across many high-contention rounds")
+    @DisplayName("rejects any HalfOpen admission that starts after a concurrent reopen, "
+            + "across many high-contention rounds")
     void should_notAdmitStaleHalfOpenPermit_when_circuitReopensDuringInFlightAcquireUnderContention()
             throws Exception {
-        // Wide contention (threadCount >> permittedCalls) plus a cheap, exception-free failure path
-        // (recordOnResult) widen the narrow read-then-CAS-vs-reopen race into something reliably
-        // observable; even so it's probabilistic, hence many independent rounds.
         final var threadCount = 2_000;
         final var permittedCalls = 50;
         final var rounds = 300;
-        // Comfortably above the permit-grant-to-operation-start gap (sub-millisecond even under
-        // load), so only admissions that clearly started after the reopening are flagged.
         var graceNanos = Duration.ofMillis(10).toNanos();
         var lateAdmissions = 0L;
 
@@ -860,8 +855,6 @@ class CircuitBreakerPatternTest {
                     .withRecordOnResult(result -> true)
                     .withClock(clock)
                     .withListener(event -> {
-                        // 1st Opened is the deliberate Closed -> Open trip below; 2nd is the
-                        // HalfOpen -> Open reopening under test.
                         if (event instanceof CircuitBreakerEvent.Opened && openedCount.incrementAndGet() == 2) {
                             reopenedAtNanos.set(System.nanoTime());
                         }
