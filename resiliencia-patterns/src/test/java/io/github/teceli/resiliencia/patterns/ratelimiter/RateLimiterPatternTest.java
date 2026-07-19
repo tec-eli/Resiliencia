@@ -235,6 +235,19 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_clampDeadlineToInstantMax_when_maxWaitOverflowsFromNearInstantMaxClock() {
+        var manualClock = new ManualClock(Instant.MAX.minus(Duration.ofNanos(1)));
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, PERIOD)
+                .withMaxWait(Duration.ofMillis(Long.MAX_VALUE))
+                .withClock(manualClock);
+
+        assertThat(limiter.call(() -> "granted"))
+                .as("the deadline (clock instant + maxWait) overflows Instant here; it must clamp to "
+                        + "Instant.MAX instead of throwing DateTimeException")
+                .isEqualTo("granted");
+    }
+
+    @Test
     void should_backOffThenYield_when_casRetriesExceedSpinThreshold() throws InterruptedException {
         // Exercises the CAS-retry back-off path in tryAcquire (Thread.onSpinWait() below the
         // threshold, Thread.yield() above it) under enough contention that some threads are
