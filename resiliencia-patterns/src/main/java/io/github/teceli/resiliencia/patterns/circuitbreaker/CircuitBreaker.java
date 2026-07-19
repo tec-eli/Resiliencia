@@ -232,6 +232,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * The current state, computed fresh on each call: for {@link CircuitState.Open}, the
      * returned {@code remainingWait} reflects the time left until a HalfOpen test call is
      * attempted, not the originally configured {@code waitDurationInOpenState}.
+     *
+     * <p>For {@link CircuitState.HalfOpen}, {@code permitsIssued} and {@code successes} are read
+     * from two independent atomics, not under a single lock, so this is a best-effort,
+     * non-atomic snapshot: a concurrent test call can complete between the two reads, meaning the
+     * pair of values returned may never have existed together at any single instant.
      */
     public CircuitState state() {
         var slot = current.get();

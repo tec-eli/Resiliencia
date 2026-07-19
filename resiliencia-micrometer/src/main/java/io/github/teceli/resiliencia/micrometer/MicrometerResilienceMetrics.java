@@ -28,6 +28,12 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Timers created by this class never opt into {@code publishPercentileHistogram()} or
  * {@code serviceLevelObjectives(...)}, to avoid the internal {@code synchronized} bucket-rotation
  * path those features enable.
+ *
+ * <p>Every metric emitted here is tagged with the pattern instance's {@code name} (the
+ * {@code "name"} tag). That name must be a static, compile-time-known string — never
+ * request-derived or tenant-derived — since it becomes a cardinality-bounded tag value in the
+ * Micrometer registry; unbounded distinct names would cause unbounded memory growth in the
+ * metrics backend.
  */
 public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     private static final String TAG_NAME = "name";
