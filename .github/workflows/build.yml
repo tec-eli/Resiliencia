@@ -1,13 +1,15 @@
 name: Build & Test
 
 on:
-  push:
-    branches: [ main, 'feat/**', 'fix/**' ]
   pull_request:
     branches: [ main ]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
