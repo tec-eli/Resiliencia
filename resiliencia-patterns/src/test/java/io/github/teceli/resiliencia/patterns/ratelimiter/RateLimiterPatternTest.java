@@ -279,6 +279,28 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_returnIncrementedRetryCount_when_backingOffBelowAndAboveSpinThreshold() throws Exception {
+        // backOff() is private/static with no externally observable effect besides its return
+        // value (Thread.onSpinWait()/Thread.yield() are unobservable), so both branches are
+        // exercised directly via reflection rather than through real CAS contention: hitting the
+        // yield branch via actual thread scheduling is scheduler-timing-dependent and was
+        // observed to flake the coverage of that branch across otherwise-identical test runs.
+        var backOffMethod = RateLimiter.class.getDeclaredMethod("backOff", int.class);
+        backOffMethod.setAccessible(true);
+        var thresholdField = RateLimiter.class.getDeclaredField("CAS_SPIN_RETRY_THRESHOLD");
+        thresholdField.setAccessible(true);
+        var threshold = (int) thresholdField.get(null);
+
+        assertThat((int) backOffMethod.invoke(null, 0))
+                .as("below the spin threshold, backOff still returns the incremented retry count")
+                .isEqualTo(1);
+        assertThat((int) backOffMethod.invoke(null, threshold))
+                .as("above the spin threshold, backOff escalates to Thread.yield() but still "
+                        + "returns the incremented retry count")
+                .isEqualTo(threshold + 1);
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
             .isThrownBy(() -> RateLimiter.<String>of("rate-limiter", 1, PERIOD).withListener(null));
