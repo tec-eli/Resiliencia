@@ -5,4 +5,5 @@ module io.github.teceli.resiliencia.spring {
     requires spring.context;
     requires spring.aop;
     requires spring.beans;
+    requires spring.boot.autoconfigure;
 }
