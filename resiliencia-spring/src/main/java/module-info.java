@@ -7,4 +7,6 @@ module io.github.teceli.resiliencia.spring {
     requires spring.beans;
     requires spring.boot.autoconfigure;
     requires org.jspecify;
+
+    exports io.github.teceli.resiliencia.spring.aop.annotation;
 }
