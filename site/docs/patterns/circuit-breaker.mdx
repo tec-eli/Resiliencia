@@ -1,0 +1,123 @@
+---
+title: CircuitBreaker
+description: Monitors call outcomes and opens the circuit when failure or slow-call rates exceed configured thresholds.
+---
+
+import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<Link className="breadcrumb" to="/#patterns">← all patterns</Link>
+
+<p className="eyebrow">pattern</p>
+
+<div className="section-lede">
+  Monitors call outcomes and opens the circuit when failure or slow-call rates exceed
+  configured thresholds — preventing calls to a degraded downstream service from propagating load.
+</div>
+
+<div className="detail-block">
+
+## State machine
+
+<figure className="diagram-figure">
+  <img
+    className="diagram-img"
+    src={useBaseUrl('/img/circuit-breaker-diagram.svg')}
+    alt="State diagram: Closed transitions to Open when the failure or slow-call rate exceeds its
+      threshold. Open transitions to HalfOpen after waitDurationInOpenState elapses. HalfOpen transitions
+      to Closed when all permitted test calls succeed, or back to Open when any test call fails."
+  />
+</figure>
+<div className="diagram-legend">
+  <span><span className="swatch" /> transition</span>
+  <span><span className="swatch failure" /> failure path (HalfOpen → Open)</span>
+</div>
+
+- **Closed → Open** — failure rate or slow-call rate exceeds its threshold, evaluated once the sliding window is full.
+- **Open → HalfOpen** — after `waitDurationInOpenState` elapses.
+- **HalfOpen → Closed** — all permitted test calls succeed.
+- **HalfOpen → Open** — any permitted test call fails.
+
+</div>
+
+<div className="detail-block">
+
+## Behavior
+
+The CircuitBreaker maintains a sliding window of the last N call outcomes. After each call it
+recalculates the failure rate and the slow-call rate. If either rate exceeds its threshold, the circuit
+opens.
+
+When open, all calls are rejected immediately without executing the operation. After a configured wait,
+the circuit moves to half-open and allows a small number of test calls through. If those succeed, the
+circuit closes. If any fail, it opens again.
+
+A name is required. It appears in events and exceptions to identify which breaker fired. The current
+state is inspectable at any time — the `Open` state carries the timestamp it was entered and
+the remaining wait duration.
+
+</div>
+
+<div className="detail-block">
+
+## Rate thresholds
+
+Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
+Thresholds are only evaluated once the sliding window has accumulated enough calls — before that, the
+circuit stays closed regardless of outcomes.
+
+- **Failure rate** — fraction of calls that threw a recorded exception.
+- **Slow-call rate** — fraction of calls that exceeded `slowCallDurationThreshold`.
+
+</div>
+
+<div className="detail-block">
+
+## Configuration
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>property</th><th>required</th><th>description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>name</td><td>yes</td><td>Identifier used in events and exceptions (instance-specific)</td></tr>
+    <tr><td>failureRateThreshold</td><td>no</td><td>Fraction of failures that triggers open. Default: 0.5</td></tr>
+    <tr><td>slowCallRateThreshold</td><td>no</td><td>Fraction of slow calls that triggers open. Default: 1.0</td></tr>
+    <tr><td>slowCallDurationThreshold</td><td>no</td><td>What counts as a slow call. Default: no limit</td></tr>
+    <tr><td>slidingWindowSize</td><td>no</td><td>Number of calls evaluated for rate calculation. Default: 10</td></tr>
+    <tr><td>waitDurationInOpenState</td><td>no</td><td>Time in Open before transitioning to HalfOpen. Default: 60s</td></tr>
+    <tr><td>permittedCallsInHalfOpenState</td><td>no</td><td>Test calls allowed in HalfOpen. Default: 3</td></tr>
+    <tr><td>recordOn</td><td>no</td><td>Exception types that count as failures. Default: any Exception</td></tr>
+    <tr><td>ignoreOn</td><td>no</td><td>Exception types that are not recorded</td></tr>
+    <tr><td>recordOnResult</td><td>no</td><td>Predicate — record a failure based on return value</td></tr>
+    <tr><td>withListener()</td><td>no</td><td>Subscribe to circuit events (e.g. Opened, Closed, CallRecorded)</td></tr>
+    <tr><td>withClock()</td><td>no</td><td>Use a custom Clock instead of system (mainly for testing)</td></tr>
+    <tr><td>state()</td><td>inspect</td><td>Get current state (Closed/Open/HalfOpen) with remaining wait</td></tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+
+<div className="detail-block">
+
+## Events & failure
+
+- **Opened** — circuit transitioned to Open. Carries: name, reason.
+- **Closed** — circuit transitioned to Closed. Carries: name, number of successful test calls.
+- **HalfOpened** — circuit transitioned to HalfOpen. Carries: name.
+- **CallRecorded** — a call outcome was recorded. Carries: name, success/failure, elapsed time, current failure rate.
+- **Rejected** — a call was rejected without executing, because the circuit was Open or HalfOpen with no test-call permits left.
+
+<div style={{marginTop: '1rem'}}>
+  Throws <code>CircuitBreakerOpenException</code> when a call is rejected because the circuit is open.
+  Fields: name, open since, remaining wait.
+</div>
+
+</div>
+
+<div className="cta-row">
+  <a className="btn-outline" href={useBaseUrl('/apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/circuitbreaker/CircuitBreaker.html')}>API reference →</a>
+  <Link className="btn-outline" to="/#patterns">← back to patterns</Link>
+</div>

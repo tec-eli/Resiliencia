@@ -1,0 +1,97 @@
+.playground {
+  margin: 1.5rem 0 2rem;
+  background: var(--blue-deep);
+  border: 1.5px solid var(--blue-line-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.playgroundHead {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .6rem .9rem;
+  border-bottom: 1px solid var(--blue-line);
+  background: var(--blue-line);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue-line-strong);
+}
+
+.filename {
+  margin-left: .5rem;
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  color: var(--white-dim);
+}
+
+.runButton {
+  margin-left: auto;
+  padding: .35rem .9rem;
+  border: 1.5px dashed var(--blue-line-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  letter-spacing: .03em;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.runButton:hover:not(:disabled) {
+  border-color: var(--white);
+  background: rgba(240, 240, 240, 0.08);
+}
+.runButton:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.editorHost {
+  font-family: var(--font-mono);
+}
+.editorHost :global(.cm-editor) {
+  outline: none;
+}
+
+.output,
+.outputError {
+  margin: 0;
+  padding: 1rem 1.4rem;
+  border-top: 1px dashed var(--blue-line-strong);
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--white);
+  background: var(--black);
+}
+.outputError {
+  color: #ff8a8a;
+}
+
+.disclaimer {
+  margin: 0;
+  padding: .8rem 1.4rem 1.1rem;
+  font-family: var(--font-hand);
+  font-size: .95rem;
+  line-height: 1.5;
+  color: var(--white-dim);
+}
+
+.loadingPlaceholder {
+  margin: 1.5rem 0 2rem;
+  padding: 2rem;
+  background: var(--blue-deep);
+  border: 1.5px dashed var(--blue-line-strong);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  color: var(--white-dim);
+  text-align: center;
+}
