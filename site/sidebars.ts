@@ -19,7 +19,13 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Patterns',
       collapsible: false,
-      items: ['patterns/circuit-breaker'],
+      items: [
+        'patterns/retry',
+        'patterns/timeout',
+        'patterns/circuit-breaker',
+        'patterns/bulkhead',
+        'patterns/rate-limiter',
+      ],
     },
   ],
 };

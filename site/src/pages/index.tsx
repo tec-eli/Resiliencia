@@ -98,7 +98,6 @@ function Hero() {
 }
 
 function Patterns() {
-  const useApidocsUrl = (path: string) => useBaseUrl(`/apidocs/${path}`);
   useBrokenLinks().collectAnchor('patterns');
   return (
     <section className={`${styles.section} ${styles.patterns}`} id="patterns">
@@ -111,17 +110,17 @@ function Patterns() {
         </p>
 
         <div className={styles.patternsGrid}>
-          <a className={styles.patternCard} href={useApidocsUrl('io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/retry/Retry.html')}>
+          <Link className={styles.patternCard} to="/docs/patterns/retry">
             <PatternIcon name="retry" />
             <h3>Retry</h3>
             <p>Retries a failing call with a configurable number of attempts, wait duration, and optional exponential backoff.</p>
-          </a>
+          </Link>
 
-          <a className={styles.patternCard} href={useApidocsUrl('io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/timeout/Timeout.html')}>
+          <Link className={styles.patternCard} to="/docs/patterns/timeout">
             <PatternIcon name="timeout" />
             <h3>Timeout</h3>
             <p>Cancels a call that runs too long. Real cancellation via virtual&nbsp;thread interruption — not polling.</p>
-          </a>
+          </Link>
 
           <Link className={styles.patternCard} to="/docs/patterns/circuit-breaker">
             <PatternIcon name="circuit-breaker" />
@@ -129,17 +128,17 @@ function Patterns() {
             <p>Stops calling a degraded dependency. Closed, Open, HalfOpen — modeled as a sealed <code>CircuitState</code>.</p>
           </Link>
 
-          <a className={styles.patternCard} href={useApidocsUrl('io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/bulkhead/Bulkhead.html')}>
+          <Link className={styles.patternCard} to="/docs/patterns/bulkhead">
             <PatternIcon name="bulkhead" />
             <h3>Bulkhead</h3>
             <p>Caps concurrent calls with a semaphore. Blocking a virtual thread while it waits is cheap.</p>
-          </a>
+          </Link>
 
-          <a className={styles.patternCard} href={useApidocsUrl('io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/ratelimiter/RateLimiter.html')}>
+          <Link className={styles.patternCard} to="/docs/patterns/rate-limiter">
             <PatternIcon name="rate-limiter" />
             <h3>RateLimiter</h3>
             <p>Caps how often a call may run inside a configurable time window.</p>
-          </a>
+          </Link>
         </div>
       </div>
     </section>

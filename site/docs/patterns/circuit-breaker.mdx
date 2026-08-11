@@ -68,9 +68,9 @@ the remaining wait duration.
 
 ## Rate thresholds
 
-Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
-Thresholds are only evaluated once the sliding window has accumulated enough calls — before that, the
-circuit stays closed regardless of outcomes.
+Both thresholds are expressed as fractions greater than 0.0 and up to 1.0 (0.0 itself is rejected at
+construction). A value of `0.5` means 50%. Thresholds are only evaluated once the sliding window has
+accumulated enough calls — before that, the circuit stays closed regardless of outcomes.
 
 - **Failure rate** — fraction of calls that threw a recorded exception.
 - **Slow-call rate** — fraction of calls that exceeded `slowCallDurationThreshold`.
@@ -121,8 +121,10 @@ circuit stays closed regardless of outcomes.
 - **Rejected** — a call was rejected without executing, because the circuit was Open or HalfOpen with no test-call permits left.
 
 <div style={{marginTop: '1rem'}}>
-  Throws <code>CircuitBreakerOpenException</code> when a call is rejected because the circuit is open.
-  Fields: name, open since, remaining wait.
+  Throws <code>CircuitBreakerOpenException</code> when a call is rejected — either the circuit is
+  Open, or it is HalfOpen with every permitted test call already issued. Fields: name, and, only for
+  the Open case, open since / remaining wait (both empty <code>Optional</code>s for a HalfOpen
+  rejection, which has nothing equivalent to report).
 </div>
 
 </div>

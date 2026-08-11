@@ -1,0 +1,124 @@
+---
+title: Retry
+description: Retries a failed operation up to a configured number of attempts, with exponential backoff, jitter, and an optional overall deadline.
+---
+
+import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<Link className="breadcrumb" to="/#patterns">← all patterns</Link>
+
+<p className="eyebrow">pattern</p>
+
+<div className="section-lede">
+  Executes an operation, retrying on failure up to a configured number of attempts —
+  with exponential backoff, optional jitter, and an optional overall deadline across the whole loop.
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">01</p>
+
+## Execution flow
+
+- **Attempt** — the operation runs.
+- **Success** — returns immediately; a `Success` event is emitted and no further attempts are made.
+- **Failure** — an `AttemptFailed` event is emitted, then `shouldRetry` is tested against the thrown exception.
+- **Not retryable** — `shouldRetry` returns `false` → a `Rejected` event is emitted and `RetryRejectedException` is
+  thrown, even if this was the last available attempt.
+- **Retryable, but out of budget** — the attempt count has reached `maxAttempts`, or the overall deadline has
+  already elapsed → an `Exhausted` event is emitted and `RetryExhaustedException` is thrown.
+- **Retryable, budget remains** — the loop sleeps for the current backoff delay (with jitter applied and
+  `maxDelayMs` clamping it), then grows the delay by `backoffMultiplier` and tries again.
+- **Interrupted during the sleep** — the thread's interrupt status is restored, an `Interrupted` event is emitted,
+  and `RetryInterruptedException` is thrown carrying the failure that was about to be retried.
+- **Deadline check after the sleep** — if the overall deadline passed while sleeping, the loop stops as Exhausted
+  without making another attempt.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">02</p>
+
+## Behavior
+
+`maxAttempts` counts the first call as an attempt — `withMaxAttempts(1)` disables retrying entirely. Backoff grows
+exponentially: the first retry waits `initialDelayMs`, and every subsequent delay is the previous one multiplied by
+`backoffMultiplier`. `maxDelayMs` caps every delay, including the initial one and after jitter is applied — a delay
+above the cap is clamped, not rejected.
+
+Jitter shifts each delay by a uniformly random offset within `[delay * (1 - jitterFactor), delay * (1 + jitterFactor)]`,
+spreading out retries from clients that failed at the same moment (thundering herd). A `jitterFactor` of `0.0` (the
+default) disables jitter.
+
+An optional overall deadline (`withOverallDeadline`) bounds the total wall-clock time spent across all attempts and
+backoff waits, measured from the first attempt. It is checked only *between* attempts — it never preempts an attempt
+already in progress, which stays a per-attempt `Timeout`'s responsibility. Once it elapses, the loop stops exactly as
+if the attempt budget itself had run out.
+
+`shouldRetry` is evaluated before the attempt count and the deadline are checked. This means a non-retryable
+exception always produces `RetryRejectedException`, even on the last attempt, rather than being reported as
+`RetryExhaustedException`. By default, `shouldRetry` retries only `IOException` and its subclasses — other
+exceptions are treated as permanent failures.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">03</p>
+
+## Configuration
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>property</th><th>required</th><th>description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>name</td><td>yes</td><td>Identifier used in events and exceptions (instance-specific)</td></tr>
+    <tr><td>withMaxAttempts()</td><td>no</td><td>Total attempts, including the first call. Default: 3</td></tr>
+    <tr><td>withInitialDelay()</td><td>no</td><td>Wait before the first retry, in milliseconds. Default: 100ms</td></tr>
+    <tr><td>withBackoffMultiplier()</td><td>no</td><td>Factor each delay is multiplied by after a failed attempt. Default: 2.0</td></tr>
+    <tr><td>withMaxDelay()</td><td>no</td><td>Cap on every backoff delay, applied after jitter. Default: uncapped</td></tr>
+    <tr><td>withJitter()</td><td>no</td><td>Uniform randomization factor for each delay, in [0.0, 1.0]. Default: 0.0 (off)</td></tr>
+    <tr><td>withOverallDeadline()</td><td>no</td><td>Total wall-clock budget across all attempts and backoff waits, checked between attempts. Default: uncapped</td></tr>
+    <tr><td>withShouldRetry()</td><td>no</td><td>Predicate deciding whether a thrown exception is retried. Default: retries only IOException and subclasses</td></tr>
+    <tr><td>withListener()</td><td>no</td><td>Subscribe to retry events (e.g. Success, AttemptFailed, Exhausted)</td></tr>
+    <tr><td>withClock()</td><td>no</td><td>Use a custom Clock instead of system (mainly for testing)</td></tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">04</p>
+
+## Events & failure
+
+- **Success** — the operation succeeded. Carries: timestamp, name, total attempts taken.
+- **AttemptFailed** — an attempt was made and failed. Carries: timestamp, name, attempt number, the thrown exception.
+- **Rejected** — `shouldRetry` declined to retry a failure before the attempt budget was exhausted. Carries:
+  timestamp, name, attempt number, the rejected exception.
+- **Exhausted** — all attempts failed, whether because `maxAttempts` was reached or the overall deadline elapsed.
+  Carries: timestamp, name, total attempts, the last exception.
+- **Interrupted** — the thread was interrupted while waiting for a backoff delay. Carries: timestamp, name, attempt
+  number, the last real failure (not the interrupt itself).
+
+<div style={{marginTop: '1rem'}}>
+  Throws <code>RetryExhaustedException</code> when the attempt budget or overall deadline runs out — produced from
+  the Exhausted path. Throws <code>RetryRejectedException</code> when <code>shouldRetry</code> declines to retry —
+  produced from the Rejected path. Throws <code>RetryInterruptedException</code> when the thread is interrupted
+  during a backoff wait — produced from the Interrupted path. All three carry <code>attemptCount</code> (total
+  attempts made, including the first) and the relevant failure via <code>getCause()</code>; only <code>call()</code>
+  throws them — <code>outcome()</code> instead returns a <code>Failure</code> outcome wrapping the same cause.
+</div>
+
+</div>
+
+<div className="cta-row">
+  <a className="btn-outline" href={useBaseUrl('/apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/retry/Retry.html')}>API reference →</a>
+  <Link className="btn-outline" to="/#patterns">← back to patterns</Link>
+</div>
