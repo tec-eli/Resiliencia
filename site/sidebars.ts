@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Patterns',
+      collapsible: false,
       items: ['patterns/circuit-breaker'],
     },
   ],

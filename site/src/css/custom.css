@@ -77,9 +77,13 @@
 
 html {
   scroll-behavior: smooth;
+  height: auto;
+  min-height: 100%;
 }
 
 body {
+  height: auto;
+  min-height: 100%;
   background-image:
     repeating-linear-gradient(0deg, var(--blue-line) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(90deg, var(--blue-line) 0 1px, transparent 1px 28px);
@@ -173,6 +177,9 @@ body {
 }
 
 .detail-block {
+  background: linear-gradient(rgba(0, 0, 0, .28), rgba(0, 0, 0, .28)), var(--blue);
+  border-radius: 4px;
+  padding: 1.75rem 2rem;
   margin-bottom: 2.75rem;
 }
 .detail-block:last-child {
@@ -304,7 +311,7 @@ body {
 /* ---------- docs chrome: sidebar / TOC / pagination, restyled to match blueprint ---------- */
 
 .theme-doc-sidebar-container {
-  background: var(--blue-deep) !important;
+  background: none !important;
   border-right: 1px dashed var(--blue-line-strong) !important;
 }
 
@@ -318,7 +325,7 @@ body {
 .menu__link--active:hover {
   background: var(--blue-line);
   color: var(--white);
-  border-left: 3px solid var(--black);
+  border-left: 3px solid var(--white);
   padding-left: calc(.75rem - 3px);
 }
 .menu__list-item-collapsible {
@@ -397,12 +404,6 @@ body {
   background: var(--header-blue);
   border-bottom: 1px solid var(--blue-line);
   box-shadow: none;
-}
-
-/* ---------- guides pages: slightly lighter blue than the rest of the site ---------- */
-
-.docs-wrapper {
-  --blue: #0d3f80;
 }
 
 /*
