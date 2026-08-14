@@ -192,11 +192,9 @@ function Guides() {
         <p className="eyebrow">guides</p>
         <div className={styles.guidesHeadingRow}>
           <h2>Written for the way you&apos;ll actually use it</h2>
-          <span className={styles.stampDraft}>draft — yours to write</span>
         </div>
         <p className="section-lede">
-          Short, practical guides, not a full API reference. These three are placeholders for the shape of the
-          section.
+          Short, practical guides, not a full API reference.
         </p>
 
         <div className={styles.guidesGrid}>
@@ -205,16 +203,21 @@ function Guides() {
             <h3>Getting started</h3>
             <p>Add resiliencia-core and resiliencia-patterns, then wrap your first call in a Retry.</p>
           </Link>
-          <article className={styles.guideCard}>
+          <Link className={styles.guideCard} to="/docs/policy-composition">
             <p className={styles.guideIndex}>02</p>
             <h3>Composing a Policy</h3>
             <p>Chain CircuitBreaker, Retry and Timeout with an order the library validates for you.</p>
-          </article>
-          <article className={styles.guideCard}>
+          </Link>
+          <Link className={styles.guideCard} to="/docs/testing-manual-clock">
             <p className={styles.guideIndex}>03</p>
             <h3>Testing with ManualClock</h3>
             <p>Drive retries and timeouts deterministically with resiliencia-test — no <code>Thread.sleep</code> in your test suite.</p>
-          </article>
+          </Link>
+          <Link className={styles.guideCard} to="/docs/metrics-micrometer">
+            <p className={styles.guideIndex}>04</p>
+            <h3>Metrics with Micrometer</h3>
+            <p>Wire pattern and Policy events into Micrometer counters, gauges and timers.</p>
+          </Link>
         </div>
       </div>
     </section>

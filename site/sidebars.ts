@@ -13,7 +13,7 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
  Create as many sidebars as you want.
  */
 const sidebars: SidebarsConfig = {
-  guidesSidebar: ['intro'],
+  guidesSidebar: ['intro', 'policy-composition', 'testing-manual-clock', 'metrics-micrometer'],
   patternsSidebar: [
     {
       type: 'category',

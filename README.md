@@ -1,4 +1,4 @@
-# resiliencia
+# Resiliencia
 
 ![resiliencia](docs/assets/resiliencia-banner.png)
 

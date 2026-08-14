@@ -1,0 +1,123 @@
+---
+sidebar_position: 2
+title: Composing a Policy
+description: Chain CircuitBreaker, Retry and Timeout with an order the library validates for you.
+---
+
+Chain `Retry` with `CircuitBreaker` and `Timeout` in one explicit, validated order via `resiliencia-compose`.
+
+<div className="section-lede">
+  <code>Policy</code> wraps multiple patterns around a single call. The first pattern passed to{' '}
+  <code>compose</code> is the outermost layer, invoked first; each pattern added via{' '}
+  <code>and</code> becomes the new innermost layer, closer to the operation. The order isn't just
+  cosmetic — the library checks it at construction time.
+</div>
+
+<div className="detail-block">
+
+## Add the dependency
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-compose</artifactId>
+  <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+`resiliencia-compose` only needs `resiliencia-core` — it doesn't pull in `resiliencia-patterns`
+itself, so add that too if you haven't already (see [Getting started](./intro)).
+
+</div>
+
+<div className="detail-block">
+
+## Build a chain
+
+`Policy.compose(pattern)` starts the chain with a single pattern as the outermost layer. Each
+`.and(pattern)` call adds a new innermost layer, closer to the operation than everything added
+before it:
+
+```java
+import io.github.teceli.resiliencia.compose.Policy;
+
+var policy = Policy.compose(circuitBreaker)
+        .and(retry)
+        .and(timeout);
+
+var order = policy.call(() -> api.fetchOrder(orderId));
+```
+
+Here `circuitBreaker` sees every call first — if the circuit is open, nothing else in the chain
+runs. `retry` sits inside it, retrying only calls the circuit actually let through. `timeout` sits
+innermost, bounding each individual attempt.
+
+Don't want to think about ordering yourself? `Policy.useOptimumOrder(...)` takes any set of
+patterns and composes them in the library's recommended order — RateLimiter, CircuitBreaker,
+Bulkhead, Retry, Timeout, outermost to innermost — regardless of the order you pass them in:
+
+```java
+var policy = Policy.useOptimumOrder(retry, circuitBreaker, timeout);
+// composed as circuitBreaker → retry → timeout, the same chain as above
+```
+
+</div>
+
+<div className="detail-block">
+
+## Order validation
+
+Every `.and(pattern)` call checks the new pattern against everything already in the chain — not
+just the adjacent one. Two severities:
+
+- **Rejected at construction.** Retry wrapping CircuitBreaker throws `InvalidPolicyException` —
+  the retry loop would burn its attempt budget against an already-open circuit, which fails fast
+  on every attempt. There's no legitimate use case, so construction fails immediately:
+
+  ```java
+  Policy.compose(retry).and(circuitBreaker);
+  // throws InvalidPolicyException — compose CircuitBreaker before Retry instead
+  ```
+
+- **Logged and allowed.** Timeout wrapping Retry logs a `WARN` via SLF4J but lets construction
+  proceed — valid for a per-attempt timeout, which is what's implemented today, but potentially a
+  mistake if an overall deadline across the whole retry loop was intended instead. Configuring
+  `Retry.withOverallDeadline(...)` suppresses the warning, since that Retry already bounds its own
+  total duration.
+
+A handful of other combinations follow the same two rules — Bulkhead wrapping CircuitBreaker or
+RateLimiter is rejected outright; Retry wrapping RateLimiter or Bulkhead only warns. In every case
+the message names the exact problem and the suggested fix, so there's no need to memorize the
+table — the library tells you at construction time.
+
+</div>
+
+<div className="detail-block">
+
+## Call it
+
+`Policy` implements `Resilient<T>`, the same interface every individual pattern implements, so it
+supports all three call styles:
+
+```java
+// Blocking
+var order = policy.call(() -> api.fetchOrder(orderId));
+
+// Async
+CompletableFuture<Order> future = policy.callAsync(() -> api.fetchOrder(orderId));
+
+// No exceptions — a typed result
+var outcome = policy.outcome(() -> api.fetchOrder(orderId));
+switch (outcome) {
+    case Outcome.Success<Order>(var value) -> log.info("Got order {}", value);
+    case Outcome.Failure<Order>(var cause) -> log.warn("Failed", cause);
+    case Outcome.TimedOut<Order> ignored -> log.warn("Timed out");
+}
+```
+
+`call` propagates whichever exception the innermost failing pattern throws — a
+`CircuitBreakerOpenException` from the circuit breaker, a `RetryExhaustedException` from the
+retry loop, and so on — unwrapped, so catching the specific exception type still works through a
+composed `Policy` exactly as it would against the pattern directly.
+
+</div>

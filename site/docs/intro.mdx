@@ -4,8 +4,6 @@ title: Getting started
 description: Add resiliencia-core and resiliencia-patterns, then wrap your first call in a Retry.
 ---
 
-import JavaPlayground from '@site/src/components/JavaPlayground';
-
 Add `resiliencia-core` and `resiliencia-patterns`, then wrap your first call in a `Retry`.
 
 <div className="section-lede">
@@ -101,57 +99,6 @@ switch (result) {
 }
 ```
 
-### Try it
-
-Edit the retry loop below and hit **run** — it's a small, self-contained sketch of the same
-maxAttempts/initialDelay/backoffMultiplier defaults shown above (not an import of the real library; see the
-note underneath for why).
-
-<JavaPlayground
-  filename="RetrySketch.java"
-  initialCode={`import java.util.function.Supplier;
-
-public class RetrySketch {
-
-    record RetryConfig(int maxAttempts, long initialDelayMs, double backoffMultiplier) {}
-
-    static <T> T retry(Supplier<T> action, RetryConfig config) throws InterruptedException {
-        long delay = config.initialDelayMs();
-        RuntimeException lastFailure = null;
-
-        for (int attempt = 1; attempt <= config.maxAttempts(); attempt++) {
-            try {
-                return action.get();
-            } catch (RuntimeException e) {
-                lastFailure = e;
-                System.out.println("Attempt " + attempt + " failed: " + e.getMessage());
-                if (attempt < config.maxAttempts()) {
-                    Thread.sleep(delay);
-                    delay *= config.backoffMultiplier();
-                }
-            }
-        }
-        throw lastFailure;
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        var config = new RetryConfig(3, 100, 2.0);
-        var attempts = new int[]{0};
-
-        var result = retry(() -> {
-            attempts[0]++;
-            if (attempts[0] < 3) {
-                throw new RuntimeException("simulated transient failure");
-            }
-            return "order-42 fetched";
-        }, config);
-
-        System.out.println("Result: " + result);
-    }
-}
-`}
-/>
-
 </div>
 
 <div className="detail-block">
@@ -160,11 +107,11 @@ public class RetrySketch {
 
 This is enough to retry a single call. From here:
 
-- **Composing a Policy** — chain `Retry` with `CircuitBreaker` and `Timeout` in one explicit, validated
-  order via `resiliencia-compose`.
-- **Testing with ManualClock** — drive retries and timeouts deterministically in tests, with
-  `resiliencia-test`'s `ManualClock`, instead of real `Thread.sleep` delays.
-
-Both are on the roadmap for this guides section.
+- **[Composing a Policy](./policy-composition)** — chain `Retry` with `CircuitBreaker` and `Timeout` in one
+  explicit, validated order via `resiliencia-compose`.
+- **[Testing with ManualClock](./testing-manual-clock)** — drive retries and timeouts deterministically in
+  tests, with `resiliencia-test`'s `ManualClock`, instead of real `Thread.sleep` delays.
+- **[Metrics with Micrometer](./metrics-micrometer)** — wire pattern and Policy events into Micrometer
+  counters, gauges and timers with `resiliencia-metrics` and `resiliencia-micrometer`.
 
 </div>
