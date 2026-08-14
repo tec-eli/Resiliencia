@@ -89,9 +89,13 @@ html {
 body {
   height: auto;
   min-height: 100%;
+  /* A plain, fixed-size tile (not repeating-linear-gradient, which re-evaluates its gradient
+     function continuously down the whole scrollable page height) — avoids the cumulative
+     subpixel rounding drift that turned some squares into rectangles a few tiles apart. */
   background-image:
-    repeating-linear-gradient(0deg, var(--blue-line) 0 1px, transparent 1px 28px),
-    repeating-linear-gradient(90deg, var(--blue-line) 0 1px, transparent 1px 28px);
+    linear-gradient(0deg, var(--blue-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--blue-line) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 ::selection {
