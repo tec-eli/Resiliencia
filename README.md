@@ -32,7 +32,7 @@ designed around modern Java idioms: sealed interfaces, records, and pattern matc
 <dependency>
     <groupId>io.github.tec-eli</groupId>
     <artifactId>resiliencia-compose</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.0-beta.1</version>
 </dependency>
 ```
 

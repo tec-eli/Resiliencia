@@ -154,7 +154,7 @@ function Composition() {
             <p className="eyebrow">composition</p>
             <h2>Chain them with Policy</h2>
             <p className="section-lede" style={{marginBottom: 0}}>
-              <code>Policy.with(...).then(...)</code> builds an explicit call chain. The order is checked at
+              <code>Policy.compose(...).and(...)</code> builds an explicit call chain. The order is checked at
               construction time — not every combination makes sense.
             </p>
           </div>
@@ -165,9 +165,9 @@ function Composition() {
               <span className={styles.dot} />
               <span className={styles.codeFilename}>Checkout.java</span>
             </div>
-            <pre className={styles.codeBlock}><code>{`var policy = Policy.with(circuitBreaker)
-                    .then(retry)
-                    .then(timeout);
+            <pre className={styles.codeBlock}><code>{`var policy = Policy.compose(circuitBreaker)
+                    .and(retry)
+                    .and(timeout);
 
 policy.call(() -> api.fetchOrder(id));`}</code></pre>
             <div className={styles.annotation}>

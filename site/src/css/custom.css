@@ -71,6 +71,11 @@
   --ifm-hr-border-color: var(--blue-line-strong);
 
   --docusaurus-highlighted-code-line-bg: rgba(240, 240, 240, 0.14);
+
+  /* Infima's defaults (a near-transparent black overlay, and the page's own primary blue for
+     text) are unreadable against this site's dark background — solid white chip, blue text. */
+  --ifm-breadcrumb-item-background-active: var(--white);
+  --ifm-breadcrumb-color-active: var(--blue);
 }
 
 /* ---------- global blueprint texture ---------- */
@@ -207,6 +212,18 @@ body {
 }
 .detail-block ul li::marker {
   color: var(--white-dim);
+}
+
+/* Prose links (e.g. "Next steps" list) default to --ifm-link-color, which equals the page's own
+   --blue background — nearly unreadable. Give them their own, visibly distinct treatment. */
+.markdown a {
+  color: var(--white);
+  text-decoration: underline;
+  text-decoration-color: var(--blue-line-strong);
+  text-underline-offset: 3px;
+}
+.markdown a:hover {
+  text-decoration-color: var(--white);
 }
 
 .diagram-figure {
@@ -371,13 +388,16 @@ body {
 .pagination-nav__label {
   font-family: var(--font-hand);
 }
+/* Infima's default '«'/'»' glyphs render blank in the handwritten font — force a monospace
+   font (guaranteed to carry the glyph) just for the arrow itself. */
+.pagination-nav__link--prev .pagination-nav__label::before,
+.pagination-nav__link--next .pagination-nav__label::after {
+  font-family: var(--font-mono);
+}
 
 .breadcrumbs__link {
   font-family: var(--font-mono);
   font-size: .8rem;
-}
-.breadcrumbs__item--active .breadcrumbs__link {
-  background: var(--blue-line);
 }
 
 /* ---------- doc code blocks: match the homepage's Composition code panel (border, solid title bar) ---------- */
