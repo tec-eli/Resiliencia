@@ -1,0 +1,117 @@
+---
+sidebar_position: 4
+title: Metrics with Micrometer
+description: Wire pattern and Policy events into Micrometer counters, gauges and timers.
+---
+
+Wire pattern and Policy events into Micrometer counters, gauges and timers with
+`resiliencia-metrics` and `resiliencia-micrometer`.
+
+<div className="section-lede">
+  Patterns already emit typed events for every call outcome and state transition — metrics are
+  just another listener on that same event stream. <code>resiliencia-metrics</code> defines a
+  backend-neutral contract; <code>resiliencia-micrometer</code> implements it against a Micrometer{' '}
+  <code>MeterRegistry</code>. Neither is required — by default, nothing is recorded.
+</div>
+
+<div className="detail-block">
+
+## Add the dependencies
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-metrics</artifactId>
+  <version>1.0.0-beta.1</version>
+</dependency>
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-micrometer</artifactId>
+  <version>1.0.0-beta.1</version>
+</dependency>
+```
+
+`resiliencia-metrics` has no dependency on Micrometer itself — it's the neutral contract.
+`resiliencia-micrometer` is the module that actually depends on `micrometer-core`.
+
+</div>
+
+<div className="detail-block">
+
+## The `ResilienceMetrics` contract
+
+Two methods, not one per pattern:
+
+```java
+public interface ResilienceMetrics {
+    void observe(Snapshot snapshot);
+    void observe(Counters counters);
+}
+```
+
+`Snapshot` (gauge-like, current-state values — circuit state, active bulkhead calls, remaining
+rate-limiter permits) and `Counters` (event-like — a retry attempt failed, a call was rejected)
+are both sealed hierarchies, one variant per thing a pattern can report. When no backend is
+configured, patterns use `NoOpMetrics.INSTANCE`, which discards everything — you don't need to
+null-check or wire up a backend you don't want.
+
+</div>
+
+<div className="detail-block">
+
+## Wire it up
+
+`MicrometerResilienceMetrics` adapts the contract onto a `MeterRegistry`.
+`ResilienceMetricsListener` translates pattern and `Policy` events into calls against it, and
+attaches like any other listener via `withListener(...)`:
+
+```java
+import io.github.teceli.resiliencia.metrics.ResilienceMetricsListener;
+import io.github.teceli.resiliencia.micrometer.MicrometerResilienceMetrics;
+
+var metrics = new MicrometerResilienceMetrics(meterRegistry);
+var listener = new ResilienceMetricsListener(metrics);
+
+var circuitBreaker = CircuitBreaker.of("orders-api").withListener(listener);
+var policy = Policy.compose(circuitBreaker).and(retry).withListener(listener);
+```
+
+Attach the same listener to every pattern and to the `Policy` wrapping them — `Policy` only
+emits its own validation-warning events, so the individual patterns still need the listener too
+in order to report their own metrics.
+
+Every metric is tagged with the pattern's `name`, so name each instance something you'd
+recognize on a dashboard — and keep names static and reused across calls (patterns are
+constructed once, not per-request), since an unbounded set of names becomes an unbounded set of
+time series in Micrometer.
+
+</div>
+
+<div className="detail-block">
+
+## Naming convention
+
+Metrics are dot-namespaced as `resilience.<pattern>.<metric>` — the separator both Micrometer and
+OTel already use natively. A few examples:
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>metric</th><th>type</th><th>notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>resilience.retry.attempts</td><td>counter</td><td>one per failed attempt</td></tr>
+    <tr><td>resilience.retry.success</td><td>counter</td><td>one per successful call</td></tr>
+    <tr><td>resilience.circuitbreaker.state</td><td>gauge</td><td>current phase</td></tr>
+    <tr><td>resilience.circuitbreaker.calls</td><td>timer</td><td>tag: successful</td></tr>
+    <tr><td>resilience.bulkhead.active_calls</td><td>gauge</td><td>current permits in use</td></tr>
+    <tr><td>resilience.ratelimiter.remaining_permits</td><td>gauge</td><td>—</td></tr>
+    <tr><td>resilience.policy.validation_warnings</td><td>counter</td><td>tags: outer, inner</td></tr>
+  </tbody>
+</table>
+</div>
+
+A broken backend never breaks the call it's observing — a failure inside `observe(...)` is caught,
+logged at `WARN`, and the protected call proceeds unaffected.
+
+</div>

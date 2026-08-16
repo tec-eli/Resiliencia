@@ -83,6 +83,14 @@
             down the coverage metric for modules that were never meant to have coverage.
         -->
         <sonar.coverage.exclusions>resiliencia-examples/src/main/**,resiliencia-stress/src/main/**</sonar.coverage.exclusions>
+
+        <!--
+            site/static/apidocs is committed, generated Oracle JDK javadoc-tool output (regenerated
+            and overwritten on every page deploy via javadoc:aggregate, see .github/workflows/pages.yml).
+            It is not project source, so Sonar's HTML/JS rules on it (e.g. the tool's own `<html lang>`
+            with no value, its `var`-based scripts) are not actionable findings.
+        -->
+        <sonar.exclusions>site/static/apidocs/**</sonar.exclusions>
     </properties>
 
     <dependencyManagement>
@@ -144,7 +152,7 @@
 
             <!--
                 Publishes to Sonatype's Central Publisher Portal (the OSSRH/Nexus staging flow it
-                replaces is sunset). extensions=true makes it the deploy mechanism for `mvn deploy`;
+                replaces is sunset). extensions=true makes it the deployment mechanism for `mvn deploy`;
                 per-module publishing is controlled by the existing maven.deploy.skip flags, which it
                 honors the same as the default deploy provider. autoPublish is deliberately false: a
                 deployment lands as a staged, reviewable bundle in the Portal and must be published
@@ -202,6 +210,7 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
+                        <bottom>Copyright &#169; 2026 Resiliencia. All rights reserved.</bottom>
                     </configuration>
                     <executions>
                         <execution>
