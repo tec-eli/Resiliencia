@@ -202,6 +202,7 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
+                        <bottom>Copyright &#169; 2026 Resiliencia. All rights reserved.</bottom>
                     </configuration>
                     <executions>
                         <execution>

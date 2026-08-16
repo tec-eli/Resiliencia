@@ -13,6 +13,8 @@ io.github.teceli.resiliencia.metrics.retry
 io.github.teceli.resiliencia.metrics.timeout
 module:io.github.teceli.resiliencia.micrometer
 io.github.teceli.resiliencia.micrometer
+module:io.github.teceli.resiliencia.opentelemetry
+io.github.teceli.resiliencia.opentelemetry
 module:io.github.teceli.resiliencia.patterns
 io.github.teceli.resiliencia.patterns.bulkhead
 io.github.teceli.resiliencia.patterns.circuitbreaker
