@@ -11,7 +11,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tec-eli_Resiliencia&metric=alert_status&token=18f4fe092678f4960cd01cfd2b44f5abc314b620)](https://sonarcloud.io/summary/new_code?id=tec-eli_Resiliencia)
 [![Trivy Vulnerability Scan](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/security-scan.yml)
 [![OSS Index Dependency Scan](https://github.com/tec-eli/resiliencia/actions/workflows/ossindex.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/ossindex.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/Resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/Resiliencia)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tec-eli/resiliencia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/tec-eli/resiliencia)
 [![CodeQL](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/codeql.yml)
 [![Static Analysis](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml/badge.svg)](https://github.com/tec-eli/resiliencia/actions/workflows/quality.yml)
 
@@ -72,6 +72,23 @@ switch (outcome) {
     case TimedOut<String> t -> System.out.println("Timed out");
 }
 ```
+
+---
+
+## Modules
+
+Published artifacts under `io.github.tec-eli`. `resiliencia-spring`, `resiliencia-quarkus`, and
+`resiliencia-micronaut` are not yet published to Maven Central.
+
+| Module                      | Maven Central                                                                                                                                                                                                        | Description                                       |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
+| `resiliencia-core`           | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-core.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-core)                   | Base types, SPI, exception hierarchy              |
+| `resiliencia-patterns`       | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-patterns.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-patterns)           | Retry, Timeout, CircuitBreaker, Bulkhead, RateLimiter |
+| `resiliencia-compose`        | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-compose.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-compose)             | Fluent `Policy` composition                       |
+| `resiliencia-metrics`        | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-metrics.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-metrics)             | Backend-neutral metrics abstraction               |
+| `resiliencia-micrometer`     | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-micrometer.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-micrometer)       | Micrometer integration                            |
+| `resiliencia-opentelemetry`  | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-opentelemetry.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-opentelemetry) | OpenTelemetry integration                         |
+| `resiliencia-test`           | [![Maven Central](https://img.shields.io/maven-central/v/io.github.tec-eli/resiliencia-test.svg)](https://central.sonatype.com/artifact/io.github.tec-eli/resiliencia-test)                   | Test helpers: `Fake*`, `ManualClock`, assertions  |
 
 ---
 
