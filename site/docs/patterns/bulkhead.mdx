@@ -1,0 +1,117 @@
+---
+title: Bulkhead
+description: Bounds how many calls may execute concurrently, isolating a protected resource from overload.
+---
+
+import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<Link className="breadcrumb" to="/#patterns">← all patterns</Link>
+
+<p className="eyebrow">pattern</p>
+
+<div className="section-lede">
+  Bounds how many calls may execute concurrently, isolating a protected resource from
+  overload — excess calls either fail fast or wait for a permit to free up.
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">01</p>
+
+## Admission control
+
+A Bulkhead is built on a `java.util.concurrent.Semaphore` initialized with `maxConcurrentCalls`
+permits. Before an operation executes, the call tries to acquire a permit; it releases the permit
+when the operation finishes, whether it succeeded or failed.
+
+Blocking a virtual thread to wait for a permit is cheap, so a caller over the limit can either fail
+fast or wait, depending on configuration:
+
+- **`maxWait` zero (the default)** — the call is rejected the instant no permit is free. No blocking.
+- **`maxWait` greater than zero** — the call blocks for up to `maxWait` for a permit to become
+  available before being rejected.
+
+Each `withX` method on `Bulkhead` returns a new, independent instance with its own fresh, unused
+set of permits — configuration is immutable, but the permits themselves are live state, so the same
+instance must be shared across every caller that should compete for the same permits.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">02</p>
+
+## Behavior
+
+When a permit is acquired, a `Permitted` event fires and the operation runs. On completion — success
+or failure — the permit is released and a `Finished` event fires. If the wait for a permit elapses
+without one becoming available, a `Rejected` event fires and the call fails with
+`BulkheadFullException`.
+
+The number of calls currently holding a permit is derived from the semaphore's available permits
+(`maxConcurrentCalls - permits.availablePermits()`) and reported on `Permitted` and `Finished`
+events as `activeCalls`. This count is best-effort under concurrency: another thread may acquire or
+release a permit between the read and the event being observed.
+
+If the waiting thread is interrupted while blocked on `tryAcquire`, the interrupt status is restored
+on the current thread and the call fails with a `ResilientException` wrapping the
+`InterruptedException` — it does not throw `BulkheadFullException` in that case, since the permit
+wait didn't run to completion or exhaustion, it was cut short.
+
+`Duration.toMillis()` overflows for extreme `maxWait` values; the Bulkhead clamps the wait to
+`Long.MAX_VALUE` milliseconds instead of letting that exception escape.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">03</p>
+
+## Configuration
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>property</th><th>required</th><th>description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>name</td><td>yes</td><td>Identifier used in events and exceptions (instance-specific). First positional argument of <code>of(name, maxConcurrentCalls)</code>, no wither</td></tr>
+    <tr><td>maxConcurrentCalls</td><td>yes</td><td>Maximum number of concurrent executions. Second positional argument of <code>of(name, maxConcurrentCalls)</code>; also settable via <code>withMaxConcurrentCalls()</code>. Must be &gt;= 1</td></tr>
+    <tr><td>withMaxWait()</td><td>no</td><td>How long an excess call may wait for a permit before being rejected. Default: <code>Duration.ZERO</code> (fail fast)</td></tr>
+    <tr><td>withListener()</td><td>no</td><td>Subscribe to bulkhead events (Permitted, Rejected, Finished)</td></tr>
+    <tr><td>withClock()</td><td>no</td><td>Use a custom Clock for event timestamps instead of the system clock (mainly for testing). The permit wait itself is still enforced against real elapsed time</td></tr>
+    <tr><td>name()</td><td>inspect</td><td>The configured name</td></tr>
+    <tr><td>maxConcurrentCalls()</td><td>inspect</td><td>The configured concurrency limit</td></tr>
+    <tr><td>maxWait()</td><td>inspect</td><td>The configured maximum wait for a permit</td></tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">04</p>
+
+## Events & failure
+
+- **Permitted** — a permit was acquired, call will proceed. Carries: timestamp, name, `activeCalls`.
+- **Rejected** — no permit became available within `maxWait`. Carries: timestamp, name,
+  `maxConcurrentCalls`, `maxWait`.
+- **Finished** — a call completed and its permit was released. Carries: timestamp, name,
+  `activeCalls`.
+
+<div style={{marginTop: '1rem'}}>
+  Throws <code>BulkheadFullException</code> when the concurrency limit is reached and no permit
+  becomes free within <code>maxWait</code>. Fields: name, maxConcurrentCalls, maxWait. The
+  <code>name</code> carried here must be a static, compile-time-known string, since it is used as a
+  cardinality-bounded key in metrics and logging.
+</div>
+
+</div>
+
+<div className="cta-row">
+  <a className="btn-outline" href={useBaseUrl('/apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/bulkhead/Bulkhead.html')}>API reference →</a>
+  <Link className="btn-outline" to="/#patterns">← back to patterns</Link>
+</div>

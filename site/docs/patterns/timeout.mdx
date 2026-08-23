@@ -1,0 +1,123 @@
+---
+title: Timeout
+description: Bounds how long a caller waits for an operation, cancelling it via real virtual-thread interruption when the deadline passes.
+---
+
+import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<Link className="breadcrumb" to="/#patterns">← all patterns</Link>
+
+<p className="eyebrow">pattern</p>
+
+<div className="section-lede">
+  Runs an operation on a virtual thread and bounds how long the caller waits for it —
+  enforcing the deadline with real thread interruption, not polling.
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">01</p>
+
+## Cancellation mechanism
+
+Each call starts a dedicated virtual thread that runs the operation. The caller blocks on
+`worker.join(timeout)`, so the deadline is enforced against real elapsed time — not against the
+configurable `Clock`, which only timestamps events. If the worker finishes before the join times
+out, its result is returned. If the join times out first, the caller is unblocked immediately and,
+when `cancelOnTimeout` is true (the default), the worker thread is interrupted — a genuine
+cancellation signal delivered to the operation, not a polling loop checking elapsed time.
+
+Interruption only stops the operation if it actually responds to it — blocking calls that check
+`Thread.interrupted()` or throw `InterruptedException` will stop; tight CPU loops or code that
+swallows the interrupt will keep running in the background even though the caller has already moved
+on. Either way, the caller's own result is decided the moment the deadline passes; it never waits
+for the worker to actually stop.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">02</p>
+
+## Behavior
+
+Every worker virtual thread is given a unique name (`resiliencia-timeout-N`, an internal
+incrementing counter) purely so thread dumps under load can be correlated back to the `Timeout`
+invocation that started them — it is not a configurable property.
+
+Three outcomes are possible once the worker finishes or the deadline passes:
+
+- **Success within the deadline** — `outcome()` returns `Outcome.Success`; `call()` returns the value.
+- **Deadline passes first** — `outcome()` returns `Outcome.TimedOut`; `call()` throws
+  `ResilientTimeoutException`. `Outcome.TimedOut.fold()` also converts to a `ResilientTimeoutException`
+  for callers using the functional style.
+- **The operation itself throws** before the deadline — `outcome()` returns `Outcome.Failure`;
+  `call()` rethrows the original `RuntimeException` unchanged, or wraps a checked exception in a
+  `ResilientException`. An `Error` thrown by the operation is never wrapped — it is stored on the
+  worker and rethrown as-is on the caller's thread once `join()` confirms the worker has finished.
+
+When `cancelOnTimeout` is `false`, the worker is left to run to completion in the background instead
+of being interrupted — the caller still gets `Outcome.TimedOut` / `ResilientTimeoutException`
+immediately, only the worker's fate changes. In both cases, a worker that is still running when the
+deadline passes is "abandoned": its eventual result can no longer reach the caller (who already
+received `TimedOut`), so it is only reported best-effort via `AbandonedWorkerSucceeded` /
+`AbandonedWorkerFailed` events, never as a second `Outcome`.
+
+A separate edge case: if the *calling* thread itself is interrupted while blocked in `join()` — not
+the deadline elapsing — the worker is interrupted as a best-effort cleanup, the caller's interrupt
+status is restored, and `outcome()` returns `Outcome.Failure` wrapping a `ResilientException`
+("Interrupted while waiting for operation to complete"). No `TimeoutEvent` is emitted for this path,
+since it never reached a normal completion or a deadline verdict.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">03</p>
+
+## Configuration
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>property</th><th>required</th><th>description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>name</td><td>yes</td><td>Identifier used in every event, set via <code>of(name, timeout)</code> — no wither, not runtime-changeable</td></tr>
+    <tr><td>timeout</td><td>yes</td><td>Maximum time the caller waits before the operation is considered timed out, set via <code>of(name, timeout)</code>. Must be positive; no default</td></tr>
+    <tr><td>withTimeout()</td><td>no</td><td>Change the timeout on an existing instance, producing a new one. Must be positive</td></tr>
+    <tr><td>cancelOnTimeout</td><td>no</td><td>Interrupt the worker thread when the deadline passes. Default: true</td></tr>
+    <tr><td>withListener()</td><td>no</td><td>Subscribe to timeout events (e.g. Succeeded, TimedOut, Failed)</td></tr>
+    <tr><td>withClock()</td><td>no</td><td>Custom Clock for event timestamps only — does not affect the deadline, which is enforced against real elapsed time. Default: system clock</td></tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">04</p>
+
+## Events & failure
+
+- **Succeeded** — the operation completed within the deadline. Carries: timestamp, name, elapsed time.
+- **Failed** — the operation threw before the deadline elapsed. Carries: timestamp, name, the thrown error.
+- **TimedOut** — the deadline elapsed before the operation finished. Carries: timestamp, name, the configured timeout.
+- **AbandonedWorkerSucceeded** — a worker abandoned after `TimedOut` eventually succeeded anyway. Observability only; the caller already received `Outcome.TimedOut`. Carries: timestamp, name.
+- **AbandonedWorkerFailed** — a worker abandoned after `TimedOut` eventually threw. Observability only. Carries: timestamp, name, the thrown cause.
+
+<div style={{marginTop: '1rem'}}>
+  Throws <code>ResilientTimeoutException</code> when the deadline passes. Field: the configured
+  timeout that was exceeded. The operation's thread has already been interrupted (when
+  <code>cancelOnTimeout</code> is true) by the time this is thrown; whether it actually stopped
+  depends on it responding to interruption.
+</div>
+
+</div>
+
+<div className="cta-row">
+  <a className="btn-outline" href={useBaseUrl('/apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/timeout/Timeout.html')}>API reference →</a>
+  <Link className="btn-outline" to="/#patterns">← back to patterns</Link>
+</div>
