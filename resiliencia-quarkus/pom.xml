@@ -12,6 +12,11 @@
     <artifactId>resiliencia-quarkus</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Quarkus</name>
+    <description>Quarkus extension for resiliencia: auto-configuration, AOP annotations, and injectable beans.
+        Not yet published to Maven Central.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>

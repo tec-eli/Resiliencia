@@ -12,6 +12,11 @@
     <artifactId>resiliencia-spring</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Spring</name>
+    <description>Spring integration for resiliencia: autoconfiguration, AOP method interception, and
+        injectable beans. Not yet published to Maven Central.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
@@ -20,10 +25,9 @@
     </scm>
 
     <properties>
-        <!-- Skeleton module (module-info.java only, no implementation yet); not ready to publish. -->
+        <!-- Partial implementation (AOP interceptor only, no autoconfiguration or annotations yet); not ready to publish. -->
         <maven.deploy.skip>true</maven.deploy.skip>
-        <!-- No public/protected classes yet, so javadoc:jar has nothing to document. -->
-        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.javadoc.skip>false</maven.javadoc.skip>
     </properties>
 
     <dependencies>
@@ -53,9 +57,9 @@
             <version>7.0.8</version>
         </dependency>
         <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjweaver</artifactId>
-            <version>1.9.25.1</version>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>1.0.0</version>
         </dependency>
 
         <dependency>
@@ -73,6 +77,18 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
             <version>4.1.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.14.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>5.14.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -12,6 +12,11 @@
     <artifactId>resiliencia-test</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Test</name>
+    <description>Test helpers for consumers of the resiliencia library: fake pattern implementations, a manual
+        clock, and JUnit 5 assertions.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>

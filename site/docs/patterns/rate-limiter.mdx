@@ -1,0 +1,130 @@
+---
+title: RateLimiter
+description: Bounds how many calls may start per time window, rejecting or delaying calls once the window's permits are used up.
+---
+
+import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<Link className="breadcrumb" to="/#patterns">← all patterns</Link>
+
+<p className="eyebrow">pattern</p>
+
+<div className="section-lede">
+  Bounds how many calls may start per time window — a fixed number of permits (`limit`) per
+  fixed-length window (`period`) — rejecting or delaying calls once the window's permits are used up.
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">01</p>
+
+## Fixed-window mechanism
+
+- One `RateLimiter` instance is one shared budget: `limit` calls per `period`. All callers compete
+  for the same window.
+- The window is aligned to the instant the limiter was created (not to wall-clock boundaries like the
+  top of the minute) and advances in whole periods, as measured by its `Clock`.
+- State is a single atomic pair — window start instant and permits used in that window — updated with
+  compare-and-set. There is no lock; concurrent callers race for permits.
+- On every acquire attempt: if the current time has moved past the window's end, the window is
+  advanced forward by however many whole periods have elapsed and the used count resets to zero. If
+  the (possibly just-advanced) window still has permits left, the caller CAS-increments the used count
+  to claim one.
+- A caller that loses the CAS race retries: it spins briefly (`Thread.onSpinWait()`) for the first few
+  attempts, then falls back to `Thread.yield()` under sustained contention.
+- Unused permits never carry over — a new window always starts at zero used, regardless of how many
+  permits were left unclaimed in the previous one.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">02</p>
+
+## Behavior
+
+By default (`maxWait` zero) a call made while the window's permits are exhausted is **rejected
+immediately** — the operation never runs.
+
+With `withMaxWait` set, an excess call instead **waits** for the next window: it sleeps (via the
+configured `Clock`, cheap on a virtual thread) until the next window opens, then competes for a permit
+there, repeating until it acquires one or its wait deadline passes. If the next window would open after
+the deadline, the call is rejected without sleeping that long.
+
+A permit acquired successfully lets the operation run and its outcome is reported as usual; a rejection
+never executes the operation. Interruption while waiting is treated as failure: the caller's interrupt
+status is restored and the call fails with a `ResilientException` wrapping the `InterruptedException`,
+never a silent retry.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">03</p>
+
+## Extreme values
+
+Window and deadline arithmetic is done on `Instant`/`Duration`, which can overflow with a large enough
+`maxWait`, a window left idle for a very long time, or a custom `Clock` returning a value near
+`Instant.MAX`. RateLimiter never lets that escape as an exception:
+
+- Durations are clamped before conversion to milliseconds so `Duration.toMillis()` cannot overflow.
+- A deadline computation that would overflow is clamped to `Instant.MAX` instead — an unreachable
+  deadline simply means the wait is correctly never satisfied.
+- If the *next window's start* itself would overflow, the call is rejected immediately — no `maxWait`,
+  however generous, could wait that out.
+- If even the elapsed-time arithmetic used to advance the window overflows, the window resets straight
+  to the current instant instead of throwing.
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">04</p>
+
+## Configuration
+
+<div className="table-scroll">
+<table className="bom-table">
+  <thead>
+    <tr><th>property</th><th>required</th><th>description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>name</td><td>yes</td><td>Identifier used in events and exceptions. First positional argument of <code>of(name, limit, period)</code>, no wither</td></tr>
+    <tr><td>limit</td><td>yes</td><td>Maximum calls allowed per period. Positional argument of <code>of()</code>; also settable via <code>withLimit()</code>. Must be &gt;= 1</td></tr>
+    <tr><td>period</td><td>yes</td><td>Length of the fixed window. Positional argument of <code>of()</code>; also settable via <code>withPeriod()</code>. Must be positive</td></tr>
+    <tr><td>maxWait</td><td>no</td><td>How long an excess call may wait for the next window before being rejected. Default: <code>Duration.ZERO</code> (reject immediately)</td></tr>
+    <tr><td>withListener()</td><td>no</td><td>Subscribe to rate limiter events (Permitted, Rejected)</td></tr>
+    <tr><td>withClock()</td><td>no</td><td>Use a custom Clock instead of system (mainly for testing)</td></tr>
+    <tr><td>name() / limit() / period() / maxWait()</td><td>inspect</td><td>Read back the configured values</td></tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+
+<div className="detail-block">
+
+<p className="eyebrow">05</p>
+
+## Events & failure
+
+- **Permitted** — a permit was granted and the call will proceed. Carries: timestamp, name, remaining
+  permits in the current window.
+- **Rejected** — no permit was available within the configured wait. Carries: timestamp, name,
+  estimated wait until the next permit is likely available.
+
+<div style={{marginTop: '1rem'}}>
+  Throws <code>RateLimiterException</code> when a call is rejected because no permit became available
+  within <code>maxWait</code>. Fields: name, limit, period, max wait. The <code>name</code> carried
+  here must be a static, compile-time-known string, since it is used as a cardinality-bounded key in
+  metrics and logging.
+</div>
+
+</div>
+
+<div className="cta-row">
+  <a className="btn-outline" href={useBaseUrl('/apidocs/io.github.teceli.resiliencia.patterns/io/github/teceli/resiliencia/patterns/ratelimiter/RateLimiter.html')}>API reference →</a>
+  <Link className="btn-outline" to="/#patterns">← back to patterns</Link>
+</div>

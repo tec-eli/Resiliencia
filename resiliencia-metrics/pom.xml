@@ -12,6 +12,11 @@
     <artifactId>resiliencia-metrics</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Metrics</name>
+    <description>Vendor-neutral metrics abstraction for resiliencia patterns (counter, gauge, timer) with a
+        no-op default implementation. Zero external dependencies.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
