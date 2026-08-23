@@ -18,7 +18,7 @@
 
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=tec-eli_Resiliencia&token=18f4fe092678f4960cd01cfd2b44f5abc314b620)](https://sonarcloud.io/summary/new_code?id=tec-eli_Resiliencia)
 
-**[Website & API docs →](https://tec-eli.github.io/resiliencia/)**
+**[Website & API docs →](https://tec-eli.github.io/Resiliencia/)**
 
 **Resiliencia** brings Retry, Timeout, CircuitBreaker, Bulkhead, and RateLimiter to Java 21, built on virtual threads
 instead of thread pools and scheduler tricks — a timeout is a real interrupt, not a poll loop. Patterns compose into
