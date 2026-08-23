@@ -12,6 +12,11 @@
     <artifactId>resiliencia-core</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Core</name>
+    <description>Foundational types for the resiliencia library: the Resilient execution contract, the sealed
+        Outcome result type, the exception hierarchy, and the pattern/metrics SPI. Zero external dependencies.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>

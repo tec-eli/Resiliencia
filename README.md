@@ -20,9 +20,12 @@
 
 **[Website & API docs →](https://tec-eli.github.io/resiliencia/)**
 
-**resiliencia** is a new library that treats Java 21 as a baseline — not a target. 
-Virtual threads are the foundation, not an option. The Java Module System is enforced from the first commit. The API is
-designed around modern Java idioms: sealed interfaces, records, and pattern matching.
+**Resiliencia** brings Retry, Timeout, CircuitBreaker, Bulkhead, and RateLimiter to Java 21, built on virtual threads
+instead of thread pools and scheduler tricks — a timeout is a real interrupt, not a poll loop. Patterns compose into
+an explicit `Policy` chain, and that chain is checked when you build it: wire a `Retry` around an already-open
+`CircuitBreaker` and construction throws `InvalidPolicyException` instead of quietly burning your retry budget in
+production. The Java Module System is enforced from the first commit, and the API leans on sealed interfaces,
+records, and pattern matching throughout.
 
 ---
 
@@ -74,14 +77,49 @@ switch (outcome) {
 
 ## Patterns
 
-| Pattern        | Module                    | Description                                      |
-|----------------|---------------------------|--------------------------------------------------|
-| Retry          | resiliencia-patterns      | Retries with configurable backoff                |
-| Timeout        | resiliencia-patterns      | Real cancellation via virtual threads            |
-| CircuitBreaker | resiliencia-patterns      | Closed / Open / HalfOpen state machine           |
-| Bulkhead       | resiliencia-patterns      | Concurrency limiter via semaphore                |
-| RateLimiter    | resiliencia-patterns      | Call frequency limiter                           |
-| Policy         | resiliencia-compose       | Explicit composition of multiple patterns        |
+| Pattern        | Description                                       |
+|----------------|----------------------------------------------------|
+| Retry          | Retries with configurable backoff                 |
+| Timeout        | Real cancellation via virtual thread interruption |
+| CircuitBreaker | Closed / Open / HalfOpen state machine            |
+| Bulkhead       | Concurrency limiter via semaphore                 |
+| RateLimiter    | Call frequency limiter                            |
+
+All five live in `resiliencia-patterns`, implement the same `Resilient` interface, and work standalone — no need to
+compose them to use one.
+
+---
+
+## Composition
+
+`Policy` (in `resiliencia-compose`) chains multiple patterns into a single execution path, in an order you declare
+explicitly — outermost to innermost, wrapping the call at the center. It isn't a sixth pattern; it's how the other
+five combine.
+
+That order is meaningful, so `Policy` validates it as the chain is built. Some orderings have no legitimate use case
+— a `Retry` wrapping a `CircuitBreaker` would keep burning retry budget against a circuit that's already open — and
+are rejected at construction with `InvalidPolicyException`. Others are valid but non-default, and only logged as a
+`WARN`.
+
+---
+
+## Metrics
+
+Patterns and `Policy` emit sealed events (`Snapshot`, `Counters`) for every state change — `resiliencia-metrics`
+turns those into counter/gauge/timer calls through one small, backend-neutral contract (`ResilienceMetrics`), without
+depending on any specific metrics library itself. `resiliencia-micrometer` and `resiliencia-opentelemetry` implement
+that contract against Micrometer's `MeterRegistry` and the OpenTelemetry SDK, respectively — pick a backend, or stay
+on the built-in `NoOpMetrics` and consume the events yourself.
+
+---
+
+## Micrometer
+
+`resiliencia-micrometer` implements `ResilienceMetrics` on top of a Micrometer `MeterRegistry` — every event becomes
+a counter, gauge, or timer tagged with the pattern instance's `name`. Timers never opt into percentile histograms or
+SLO buckets, and the gauge cache is bounded, so a misbehaving caller can't grow metrics cardinality without limit.
+Drop the module on the classpath and wire the resulting `ResilienceMetrics` into your patterns; `resiliencia-opentelemetry`
+covers the same contract for the OpenTelemetry SDK.
 
 ---
 
