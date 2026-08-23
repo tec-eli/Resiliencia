@@ -1,0 +1,70 @@
+.headerInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: 100%;
+}
+.wordmarkSmall {
+  font-family: var(--font-hand);
+  font-size: 1.6rem;
+  text-decoration: none;
+  color: var(--white);
+}
+.wordmarkSmall:hover {
+  color: var(--white);
+}
+.nav {
+  display: flex;
+  gap: 1.75rem;
+  align-items: center;
+}
+.nav a {
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  letter-spacing: .03em;
+  color: var(--white-dim);
+  position: relative;
+  padding-bottom: 2px;
+}
+.nav a:hover {
+  color: var(--white);
+}
+.nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 2px;
+  background: var(--white);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .2s ease;
+}
+.nav a:hover::after {
+  transform: scaleX(1);
+}
+.navExternal {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+}
+
+@media (max-width: 640px) {
+  .headerInner {
+    flex-wrap: wrap;
+    row-gap: .75rem;
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    gap: 1.1rem;
+    font-size: .8rem;
+  }
+}

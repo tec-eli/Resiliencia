@@ -1,0 +1,98 @@
+---
+sidebar_position: 3
+title: Testing with ManualClock
+description: Drive retries and timeouts deterministically with resiliencia-test's ManualClock — no Thread.sleep in your test suite.
+---
+
+Drive retries and timeouts deterministically in tests, with `resiliencia-test`'s `ManualClock`,
+instead of real `Thread.sleep` delays.
+
+<div className="section-lede">
+  Every pattern that waits — <code>Retry</code>'s backoff, <code>RateLimiter</code>'s window,{' '}
+  <code>CircuitBreaker</code>'s <code>waitDurationInOpenState</code> — reads time through a{' '}
+  <code>Clock</code> SPI instead of calling <code>Instant.now()</code> or{' '}
+  <code>Thread.sleep</code> directly. Swap in <code>ManualClock</code> and a test that would
+  otherwise take real minutes runs instantly, with time advanced under your control.
+</div>
+
+<div className="detail-block">
+
+## Add the dependency
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-test</artifactId>
+  <version>1.0.0-beta.1</version>
+  <scope>test</scope>
+</dependency>
+```
+
+</div>
+
+<div className="detail-block">
+
+## Create a clock
+
+`ManualClock.create()` starts at a fixed, arbitrary instant. `ManualClock.startingAt(instant)`
+lets you pick that starting point yourself, useful when a test's assertions read more naturally
+against a specific date:
+
+```java
+import io.github.teceli.resiliencia.test.ManualClock;
+
+var clock = ManualClock.create();
+```
+
+</div>
+
+<div className="detail-block">
+
+## Plug it into a pattern
+
+Every pattern that accepts a `Clock` exposes it via `withClock(...)`:
+
+```java
+var attempts = new AtomicInteger(0);
+var retry = Retry.<String>create("retry-under-test")
+        .withMaxAttempts(3)
+        .withInitialDelay(60_000)
+        .withShouldRetry(e -> true)
+        .withClock(clock);
+
+var result = retry.call(() -> {
+    if (attempts.incrementAndGet() < 3) {
+        throw new RuntimeException("simulated failure");
+    }
+    return "recovered";
+});
+
+assertThat(result).isEqualTo("recovered");
+```
+
+Notice the one-minute `initialDelay`: on a real clock this test would take at least two minutes
+to run (two backoff waits). Against `ManualClock`, it completes immediately — `ManualClock`'s
+`sleep(millis)` doesn't block, it just advances the clock and returns, so the pattern's own
+backoff wait costs nothing in wall-clock time.
+
+</div>
+
+<div className="detail-block">
+
+## Advance time manually
+
+Not every wait is triggered by the pattern itself — sometimes the test needs to move time forward
+between two calls, e.g. to cross a `RateLimiter`'s refresh period. Use `advance(Duration)`:
+
+```java
+var limiter = RateLimiter.<String>of("limiter", 1, Duration.ofSeconds(1)).withClock(clock);
+
+limiter.call(() -> "first call");           // consumes the only permit in this period
+clock.advance(Duration.ofSeconds(1));       // move past the period boundary
+limiter.call(() -> "second call");          // a new period, a new permit
+```
+
+`advance` rejects a negative duration and moves the clock forward only — there's no way to move
+it backwards, keeping every test's timeline monotonic like a real clock's.
+
+</div>

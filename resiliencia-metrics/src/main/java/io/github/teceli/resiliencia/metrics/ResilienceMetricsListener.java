@@ -164,19 +164,30 @@ public final class ResilienceMetricsListener implements ResilienceEvent.Listener
 
     /**
      * Resolves an exception to a cause tag, respecting the allowlist.
-     * Returns the simple class name if the exception type is in the allowlist,
-     * otherwise returns a fixed "other" bucket to prevent unbounded cardinality.
+     * <p>
+     * Matching is subtype-aware: an allowlisted class matches the thrown exception if it
+     * {@code isInstance} of it, not only on exact class equality — the same matching direction
+     * already used elsewhere in this library for exception classification. When the thrown
+     * exception matches more than one allowlisted ancestor (e.g. both {@code IOException} and
+     * {@code Exception} are allowlisted and a {@code SocketException} is thrown), the most
+     * specific matching allowlisted class is used, never the thrown exception's own runtime
+     * class, so the number of distinct {@code cause} values stays bounded at
+     * {@code allowlist.size() + 1} exactly, regardless of how many concrete subtypes are thrown.
+     * Returns "other" if no allowlisted type matches.
      * Returns null if the allowlist is empty (cause tagging disabled).
      */
     private String resolveCause(Throwable throwable) {
         if (causeAllowlist.isEmpty()) {
             return null;
         }
-        var exceptionType = throwable.getClass();
-        if (causeAllowlist.contains(exceptionType)) {
-            return exceptionType.getSimpleName();
+        Class<? extends Throwable> mostSpecificMatch = null;
+        for (var candidate : causeAllowlist) {
+            if (candidate.isInstance(throwable)
+                && (mostSpecificMatch == null || mostSpecificMatch.isAssignableFrom(candidate))) {
+                mostSpecificMatch = candidate;
+            }
         }
-        return CAUSE_OTHER;
+        return mostSpecificMatch != null ? mostSpecificMatch.getSimpleName() : CAUSE_OTHER;
     }
 
     /**

@@ -2,6 +2,7 @@ package io.github.teceli.resiliencia.core.api;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Result of executing an operation with a pattern.
@@ -40,8 +41,8 @@ public sealed interface Outcome<T> {
      * A TimedOut outcome folds as a failure, passing a {@link ResilientTimeoutException}
      * carrying the exceeded timeout to {@code onFailure}.
      */
-    default <U> U fold(java.util.function.Function<T, U> onSuccess,
-                       java.util.function.Function<Throwable, U> onFailure) {
+    default <U> U fold(Function<T, U> onSuccess,
+                        Function<Throwable, U> onFailure) {
         return switch (this) {
             case Success<T>(T value) -> onSuccess.apply(value);
             case Failure<T>(Throwable cause) -> onFailure.apply(cause);

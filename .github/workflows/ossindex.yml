@@ -1,0 +1,46 @@
+name: OSS Index Dependency Scan
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ossindex-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          server-id: ossindex
+          server-username: OSSINDEX_USER
+          server-password: OSSINDEX_TOKEN
+
+      # Installs every module's jar to the local repo so the audit can resolve inter-module
+      # dependencies (e.g. resiliencia-patterns -> resiliencia-core).
+      - name: Install
+        run: mvn -B install -DskipTests
+
+      # Fails the build on a known CVE. Authenticated via OSSINDEX_USER/OSSINDEX_TOKEN (repo
+      # secrets), so this gates merges on trustworthy, non-rate-limited results. Invoked by full
+      # plugin coordinates so no module's pom.xml needs to depend on it.
+      - name: OSS Index audit
+        env:
+          OSSINDEX_USER: ${{ secrets.OSSINDEX_USER }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
+        run: >
+          mvn -B org.sonatype.ossindex.maven:ossindex-maven-plugin:audit
+          -Dossindex.authId=ossindex
+          -Dossindex.fail=true

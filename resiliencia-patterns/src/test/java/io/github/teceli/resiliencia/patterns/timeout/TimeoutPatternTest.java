@@ -37,6 +37,20 @@ class TimeoutPatternTest {
     }
 
     @Test
+    void should_namePerCallWorkerThread_when_operationRunsOnDifferentInvocations() {
+        var timeout = Timeout.<String>of("timeout-under-test", GENEROUS_TIMEOUT);
+
+        var firstName = timeout.call(() -> Thread.currentThread().getName());
+        var secondName = timeout.call(() -> Thread.currentThread().getName());
+
+        assertThat(firstName).startsWith("resiliencia-timeout-");
+        assertThat(secondName).startsWith("resiliencia-timeout-");
+        assertThat(firstName)
+                .as("each call's worker thread must have a distinct, correlatable name")
+                .isNotEqualTo(secondName);
+    }
+
+    @Test
     void should_throwResilienciaTimeoutException_when_operationExceedsTimeout() {
         var timeout = Timeout.<String>of("timeout-under-test", SHORT_TIMEOUT);
 

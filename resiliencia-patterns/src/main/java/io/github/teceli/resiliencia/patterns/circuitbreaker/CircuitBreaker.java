@@ -10,6 +10,7 @@ import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -231,6 +232,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * The current state, computed fresh on each call: for {@link CircuitState.Open}, the
      * returned {@code remainingWait} reflects the time left until a HalfOpen test call is
      * attempted, not the originally configured {@code waitDurationInOpenState}.
+     *
+     * <p>For {@link CircuitState.HalfOpen}, {@code permitsIssued} and {@code successes} are read
+     * from two independent atomics, not under a single lock, so this is a best-effort,
+     * non-atomic snapshot: a concurrent test call can complete between the two reads, meaning the
+     * pair of values returned may never have existed together at any single instant.
      */
     public CircuitState state() {
         var slot = current.get();
@@ -239,10 +245,24 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             case CircuitState.HalfOpen halfOpen ->
                 new CircuitState.HalfOpen(slot.permitsIssued.get(), slot.successes.get());
             case CircuitState.Open open -> {
-                var remaining = Duration.between(clock.instant(), open.openedAt().plus(waitDurationInOpenState));
+                var remaining = Duration.between(clock.instant(), openDeadline(open.openedAt()));
                 yield new CircuitState.Open(open.openedAt(), remaining.isNegative() ? Duration.ZERO : remaining);
             }
         };
+    }
+
+    /**
+     * The instant a HalfOpen test call becomes due, i.e. {@code openedAt + waitDurationInOpenState}.
+     * Clamped to {@link Instant#MAX} instead of letting {@code Instant.plus} throw when
+     * {@code openedAt} is already near the representable range's end (e.g. a contrived clock) —
+     * an unreachable deadline just means the circuit correctly never transitions early.
+     */
+    private Instant openDeadline(Instant openedAt) {
+        try {
+            return openedAt.plus(waitDurationInOpenState);
+        } catch (DateTimeException | ArithmeticException e) {
+            return Instant.MAX;
+        }
     }
 
     @Override
@@ -318,7 +338,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         return switch (slot.publicState) {
             case CircuitState.Closed c -> null;
             case CircuitState.Open open -> {
-                var deadline = open.openedAt().plus(waitDurationInOpenState);
+                var deadline = openDeadline(open.openedAt());
                 var now = clock.instant();
                 if (now.isBefore(deadline)) {
                     emit(new CircuitBreakerEvent.Rejected(
@@ -332,14 +352,21 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 yield tryAcquirePermission();
             }
             case CircuitState.HalfOpen halfOpen -> {
+                // Re-reads current every iteration and re-validates the permit CAS against it,
+                // so a stale slot from before a concurrent transition can never grant a permit.
                 while (true) {
-                    var issued = slot.permitsIssued.get();
+                    var currentSlot = current.get();
+                    if (!(currentSlot.publicState instanceof CircuitState.HalfOpen)) {
+                        yield tryAcquirePermission();
+                    }
+                    var issued = currentSlot.permitsIssued.get();
                     if (issued >= permittedCallsInHalfOpenState) {
                         emit(new CircuitBreakerEvent.Rejected(
                             clock.instant(), name, CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
                         yield CircuitBreakerOpenException.forHalfOpenState(name);
                     }
-                    if (slot.permitsIssued.compareAndSet(issued, issued + 1)) {
+                    if (currentSlot.permitsIssued.compareAndSet(issued, issued + 1)
+                            && current.get() == currentSlot) {
                         yield null;
                     }
                 }

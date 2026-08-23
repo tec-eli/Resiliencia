@@ -12,6 +12,11 @@ import java.util.Optional;
  * the circuit is Open, or it is HalfOpen and every permitted test call has already been issued.
  * {@code openSince} and {@code remainingWait} are only present in the Open case — a HalfOpen
  * rejection has nothing equivalent to report, since the circuit is already attempting test calls.
+ *
+ * <p>The {@code name} carried by this exception is the circuit breaker's own name, which must be a
+ * static, compile-time-known string — never request-derived or tenant-derived. It is used as a
+ * cardinality-bounded key/tag in metrics and logging; unbounded distinct names would cause
+ * unbounded memory growth in metrics backends.
  */
 public final class CircuitBreakerOpenException extends ResilientException {
 

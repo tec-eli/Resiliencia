@@ -1,6 +1,8 @@
 package io.github.teceli.resiliencia.core.api;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -55,11 +57,12 @@ class ResilientCallAsyncTest {
     void should_interruptOperation_when_futureCancelled() throws Exception {
         var operationStarted = new CountDownLatch(1);
         var interrupted = new CountDownLatch(1);
+        var neverReleased = new CountDownLatch(1);
 
         var future = passthrough().callAsync(() -> {
             operationStarted.countDown();
             try {
-                Thread.sleep(30_000);
+                neverReleased.await();
                 return "never";
             } catch (InterruptedException e) {
                 interrupted.countDown();
@@ -83,6 +86,7 @@ class ResilientCallAsyncTest {
     }
 
     @Test
+    @Execution(ExecutionMode.SAME_THREAD)
     void should_completeExceptionallyAndRethrowOnWorkerThread_when_operationThrowsError() throws Exception {
         var boom = new OutOfMemoryError("simulated");
         var originalHandler = Thread.getDefaultUncaughtExceptionHandler();

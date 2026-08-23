@@ -4,13 +4,23 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.teceli</groupId>
+        <groupId>io.github.tec-eli</groupId>
         <artifactId>resiliencia</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-beta.1</version>
     </parent>
 
     <artifactId>resiliencia-examples</artifactId>
     <packaging>jar</packaging>
+
+    <name>Resiliencia :: Examples</name>
+    <description>Usage examples for the resiliencia library. Not published to Maven Central.</description>
+
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -20,17 +30,17 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-patterns</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-compose</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -44,5 +54,18 @@
             <scope>runtime</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

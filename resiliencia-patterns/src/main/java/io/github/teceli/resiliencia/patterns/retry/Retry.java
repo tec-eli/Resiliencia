@@ -17,6 +17,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
@@ -29,7 +31,7 @@ import java.util.function.Predicate;
  * usable {@code Retry} instance rather than mutating this one.
  */
 public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double backoffMultiplier,
-                        long maxDelayMs, double jitterFactor, long overallDeadlineMs,
+                        long maxDelayMs, double jitterFactor, OptionalLong overallDeadline,
                         Predicate<Throwable> shouldRetry, List<ResilienceEvent.Listener> listeners, Clock clock)
         implements Resilient<T> {
 
@@ -39,7 +41,6 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
     private static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
     private static final long DEFAULT_MAX_DELAY_MS = Long.MAX_VALUE;
     private static final double DEFAULT_JITTER_FACTOR = 0.0;
-    private static final long DEFAULT_OVERALL_DEADLINE_MS = Long.MAX_VALUE;
 
     public Retry {
         Objects.requireNonNull(name, "name must not be null");
@@ -50,7 +51,10 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
         if (jitterFactor < 0.0 || jitterFactor > 1.0) {
             throw new IllegalArgumentException("jitterFactor must be between 0.0 and 1.0");
         }
-        if (overallDeadlineMs < 0) throw new IllegalArgumentException("overallDeadline must be >= 0");
+        Objects.requireNonNull(overallDeadline, "overallDeadline must not be null");
+        if (overallDeadline.isPresent() && overallDeadline.getAsLong() < 0) {
+            throw new IllegalArgumentException("overallDeadline must be >= 0");
+        }
         Objects.requireNonNull(shouldRetry, "shouldRetry must not be null");
         Objects.requireNonNull(clock, "clock must not be null");
         listeners = List.copyOf(listeners);
@@ -69,7 +73,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public static <T> Retry<T> create(String name) {
         return new Retry<>(name, DEFAULT_MAX_ATTEMPTS, DEFAULT_INITIAL_DELAY_MS, DEFAULT_BACKOFF_MULTIPLIER,
-                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR, DEFAULT_OVERALL_DEADLINE_MS,
+                DEFAULT_MAX_DELAY_MS, DEFAULT_JITTER_FACTOR, OptionalLong.empty(),
             IOException.class::isInstance,
                 List.of(), Clock.systemClock());
     }
@@ -80,7 +84,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withMaxAttempts(int maxAttempts) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     /**
@@ -89,7 +93,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withInitialDelay(long delayMs) {
         return new Retry<>(name, maxAttempts, delayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     /**
@@ -99,7 +103,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withBackoffMultiplier(double multiplier) {
         return new Retry<>(name, maxAttempts, initialDelayMs, multiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     /**
@@ -108,7 +112,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withMaxDelay(long maxDelayMs) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     /**
@@ -118,7 +122,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withJitter(double jitterFactor) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     /**
@@ -131,7 +135,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withOverallDeadline(long overallDeadlineMs) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                OptionalLong.of(overallDeadlineMs), shouldRetry, listeners, clock);
     }
 
     /**
@@ -143,7 +147,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withShouldRetry(Predicate<Throwable> predicate) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, predicate, listeners, clock);
+                overallDeadline, predicate, listeners, clock);
     }
 
     /**
@@ -155,7 +159,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
         var newListeners = new ArrayList<>(listeners);
         newListeners.add(listener);
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, newListeners, clock);
+                overallDeadline, shouldRetry, newListeners, clock);
     }
 
     /**
@@ -164,7 +168,7 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
      */
     public Retry<T> withClock(Clock clock) {
         return new Retry<>(name, maxAttempts, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor,
-                overallDeadlineMs, shouldRetry, listeners, clock);
+                overallDeadline, shouldRetry, listeners, clock);
     }
 
     @Override
@@ -178,12 +182,12 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
     }
 
     /**
-     * True once {@link #withOverallDeadline(long)} has been configured with a finite bound,
-     * telling Policy this Retry already caps its own total duration.
+     * True once {@link #withOverallDeadline(long)} has been configured, telling Policy this
+     * Retry already caps its own total duration.
      */
     @Override
     public boolean hasOwnDeadline() {
-        return overallDeadlineMs != DEFAULT_OVERALL_DEADLINE_MS;
+        return overallDeadline.isPresent();
     }
 
     @Override
@@ -222,33 +226,9 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
                 emit(new RetryEvent.Success(clock.instant(), name, attempt));
                 return new ExecutionResult<>(new Outcome.Success<>(result), attempt, FailureKind.EXHAUSTED);
             } catch (Exception e) {
-                emit(new RetryEvent.AttemptFailed(clock.instant(), name, attempt, e));
-
-                // shouldRetry is evaluated before the attempt count and deadline, per its contract
-                // (see withShouldRetry Javadoc) — a non-retryable exception is Rejected even on the
-                // last attempt, not misreported as Exhausted.
-                if (!testShouldRetry(e)) {
-                    emit(new RetryEvent.Rejected(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.REJECTED);
-                }
-
-                if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
-                    emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
-                }
-
-                try {
-                    sleep(Math.min(applyJitter(delayMs), maxDelayMs));
-                } catch (InterruptedDuringBackoff interrupted) {
-                    emit(new RetryEvent.Interrupted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED);
-                }
-
-                // Re-check deadline after sleep: if it passed, stop immediately without attempting
-                // another operation, in line with the promise in docs/patterns/retry.md:62-64
-                if (deadlineExceeded(startInstant)) {
-                    emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
-                    return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
+                var failureResult = handleFailedAttempt(e, attempt, startInstant, delayMs);
+                if (failureResult.isPresent()) {
+                    return failureResult.get();
                 }
                 delayMs = Math.min((long) (delayMs * backoffMultiplier), maxDelayMs);
             }
@@ -258,14 +238,57 @@ public record Retry<T>(String name, int maxAttempts, long initialDelayMs, double
     }
 
     /**
-     * Whether {@link #overallDeadlineMs} (if configured) has already elapsed since the first
+     * Reacts to a single failed attempt: emits {@link RetryEvent.AttemptFailed}, then decides
+     * whether the retry loop must stop here (Rejected, Exhausted, or Interrupted) or continue.
+     * An empty result means the caller should grow the backoff delay and try again.
+     */
+    private Optional<ExecutionResult<T>> handleFailedAttempt(Exception e, int attempt, Instant startInstant,
+                                                               long delayMs) {
+        emit(new RetryEvent.AttemptFailed(clock.instant(), name, attempt, e));
+
+        // shouldRetry is evaluated before the attempt count and deadline, per its contract
+        // (see withShouldRetry Javadoc) — a non-retryable exception is Rejected even on the
+        // last attempt, not misreported as Exhausted.
+        if (!testShouldRetry(e)) {
+            emit(new RetryEvent.Rejected(clock.instant(), name, attempt, e));
+            return Optional.of(new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.REJECTED));
+        }
+
+        if (attempt == maxAttempts || deadlineExceeded(startInstant)) {
+            return Optional.of(exhausted(attempt, e));
+        }
+
+        try {
+            sleep(Math.min(applyJitter(delayMs), maxDelayMs));
+        } catch (InterruptedDuringBackoff interrupted) {
+            emit(new RetryEvent.Interrupted(clock.instant(), name, attempt, e));
+            return Optional.of(new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.INTERRUPTED));
+        }
+
+        // Re-check deadline after sleep: if it passed, stop immediately without attempting another
+        // operation — the overall deadline bounds total time spent, so a wait that itself crosses
+        // the deadline must not be followed by yet another attempt.
+        if (deadlineExceeded(startInstant)) {
+            return Optional.of(exhausted(attempt, e));
+        }
+
+        return Optional.empty();
+    }
+
+    private ExecutionResult<T> exhausted(int attempt, Exception e) {
+        emit(new RetryEvent.Exhausted(clock.instant(), name, attempt, e));
+        return new ExecutionResult<>(new Outcome.Failure<>(e), attempt, FailureKind.EXHAUSTED);
+    }
+
+    /**
+     * Whether {@link #overallDeadline} (if configured) has already elapsed since the first
      * attempt. Always false when the deadline is disabled (the default).
      */
     private boolean deadlineExceeded(Instant startInstant) {
-        if (overallDeadlineMs == DEFAULT_OVERALL_DEADLINE_MS) {
+        if (overallDeadline.isEmpty()) {
             return false;
         }
-        return !clock.instant().isBefore(startInstant.plusMillis(overallDeadlineMs));
+        return !clock.instant().isBefore(startInstant.plusMillis(overallDeadline.getAsLong()));
     }
 
     private record ExecutionResult<T>(Outcome<T> outcome, int attempts, FailureKind failureKind) {}

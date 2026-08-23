@@ -16,10 +16,13 @@ import io.github.teceli.resiliencia.metrics.timeout.TimeoutCounters;
 import io.github.teceli.resiliencia.patterns.circuitbreaker.CircuitBreakerEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -28,14 +31,40 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Timers created by this class never opt into {@code publishPercentileHistogram()} or
  * {@code serviceLevelObjectives(...)}, to avoid the internal {@code synchronized} bucket-rotation
  * path those features enable.
+ *
+ * <p>Every metric emitted here is tagged with the pattern instance's {@code name} (the
+ * {@code "name"} tag). That name must be a static, compile-time-known string — never
+ * request-derived or tenant-derived — since it becomes a cardinality-bounded tag value in the
+ * Micrometer registry; unbounded distinct names would cause unbounded memory growth in the
+ * metrics backend.
+ *
+ * <p>The per-{@code metricName + name} gauge holder cache is bounded at
+ * {@link #MAX_GAUGE_CACHE_ENTRIES} entries. A caller respecting the "names must be static"
+ * contract above will only ever register a small, fixed number of distinct combinations, so this
+ * bound is never reached in normal use. If it is reached — a caller not respecting that contract —
+ * further distinct combinations are not registered as new gauges (already-registered gauges keep
+ * updating normally) and a single WARN is logged, rather than growing the cache without limit.
+ * Not evicting is deliberate: an LRU-style eviction would silently stop updating a gauge a caller
+ * is still actively using, which is worse than refusing new, previously-unseen entries once the
+ * bound is hit. The cache lookup itself stays lock-free (no {@code synchronized}), consistent with
+ * the pinning-avoidance contract for this module's event-to-metric mapping code — the trade-off is
+ * that the bound is enforced with a plain read-then-act check on the cache size, not a single
+ * atomic reservation, so under many threads racing to register distinct, previously-unseen keys at
+ * exactly the boundary at the same instant, the cache can settle slightly above
+ * {@link #MAX_GAUGE_CACHE_ENTRIES} rather than exactly at it. It never grows without bound, and the
+ * same trade-off (approximate, not exact, sizing under concurrent writes) is inherent to lock-free
+ * bounded caches generally.
  */
 public final class MicrometerResilienceMetrics implements ResilienceMetrics {
+    private static final Logger log = LoggerFactory.getLogger(MicrometerResilienceMetrics.class);
     private static final String TAG_NAME = "name";
     private static final String TAG_CAUSE = "cause";
     private static final String TAG_OUTCOME = "outcome";
+    static final int MAX_GAUGE_CACHE_ENTRIES = 10_000;
 
     private final MeterRegistry registry;
     private final Map<String, AtomicLong> gaugeHolders = new ConcurrentHashMap<>();
+    private final AtomicBoolean gaugeCacheBoundWarningLogged = new AtomicBoolean(false);
 
     public MicrometerResilienceMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -156,12 +185,28 @@ public final class MicrometerResilienceMetrics implements ResilienceMetrics {
     }
 
     private void setGauge(String metricName, String name, double value) {
-        var holder = gaugeHolders.computeIfAbsent(metricName + "|" + name, key -> {
-            var reference = new AtomicLong(Double.doubleToLongBits(value));
-            registry.gauge(metricName, Tags.of(TAG_NAME, name), reference,
-                ref -> Double.longBitsToDouble(ref.get()));
-            return reference;
-        });
+        var key = metricName + "|" + name;
+        var holder = gaugeHolders.get(key);
+        if (holder == null) {
+            if (gaugeHolders.size() >= MAX_GAUGE_CACHE_ENTRIES) {
+                warnGaugeCacheBoundReached();
+                return;
+            }
+            holder = gaugeHolders.computeIfAbsent(key, k -> {
+                var reference = new AtomicLong(Double.doubleToLongBits(value));
+                registry.gauge(metricName, Tags.of(TAG_NAME, name), reference,
+                    ref -> Double.longBitsToDouble(ref.get()));
+                return reference;
+            });
+        }
         holder.set(Double.doubleToLongBits(value));
+    }
+
+    private void warnGaugeCacheBoundReached() {
+        if (gaugeCacheBoundWarningLogged.compareAndSet(false, true)) {
+            log.warn("Gauge cache reached its bound of {} distinct metric/name combinations; further "
+                + "distinct combinations will not be registered as gauges. This usually means pattern "
+                + "names are not static, contrary to the required contract.", MAX_GAUGE_CACHE_ENTRIES);
+        }
     }
 }

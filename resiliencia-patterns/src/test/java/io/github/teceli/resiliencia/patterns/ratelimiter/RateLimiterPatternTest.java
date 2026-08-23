@@ -5,6 +5,8 @@ import io.github.teceli.resiliencia.core.api.PatternKind;
 import io.github.teceli.resiliencia.core.spi.Clock;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,7 +15,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -79,6 +84,39 @@ class RateLimiterPatternTest {
         assertThat(limiter.call(() -> "after idle")).isEqualTo("after idle");
         assertThrows(RateLimiterException.class, () ->
             limiter.call(() -> "rejected"));
+    }
+
+    @Test
+    void should_notThrowArithmeticException_when_periodIsTinyAndIdleForCenturies() {
+        var manualClock = new ManualClock();
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, Duration.ofNanos(1)).withClock(manualClock);
+        limiter.call(() -> "first");
+
+        // periodsElapsed (elapsed / period) overflows long here, which used to escape
+        // advanceWindow as an ArithmeticException instead of being handled.
+        manualClock.advance(Duration.ofDays(365 * 300));
+
+        assertThat(limiter.call(() -> "after centuries idle")).isEqualTo("after centuries idle");
+    }
+
+    @Test
+    void should_notThrowDateTimeException_when_clockIsNearInstantMaxAfterIdlePeriod() {
+        var period = Duration.ofNanos(100);
+        var manualClock = new ManualClock(Instant.MAX.minus(period.multipliedBy(2)));
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, period).withClock(manualClock);
+        limiter.call(() -> "first");
+
+        manualClock.advance(period.multipliedBy(2));
+
+        assertThat(limiter.call(() -> "near instant max"))
+                .as("a permit near Instant.MAX should still be granted, not throw DateTimeException")
+                .isEqualTo("near instant max");
+
+        var outcome = limiter.outcome(() -> "rejected in same window");
+        assertThat(outcome)
+                .as("outcome() never throws, even when the next window's start overflows Instant")
+                .isInstanceOfSatisfying(Outcome.Failure.class, f ->
+                        assertThat(f.cause()).isInstanceOf(RateLimiterException.class));
     }
 
     @Test
@@ -201,6 +239,19 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_clampDeadlineToInstantMax_when_maxWaitOverflowsFromNearInstantMaxClock() {
+        var manualClock = new ManualClock(Instant.MAX.minus(Duration.ofNanos(1)));
+        var limiter = RateLimiter.<String>of("rate-limiter", 1, PERIOD)
+                .withMaxWait(Duration.ofMillis(Long.MAX_VALUE))
+                .withClock(manualClock);
+
+        assertThat(limiter.call(() -> "granted"))
+                .as("the deadline (clock instant + maxWait) overflows Instant here; it must clamp to "
+                        + "Instant.MAX instead of throwing DateTimeException")
+                .isEqualTo("granted");
+    }
+
+    @Test
     void should_backOffThenYield_when_casRetriesExceedSpinThreshold() throws InterruptedException {
         // Exercises the CAS-retry back-off path in tryAcquire (Thread.onSpinWait() below the
         // threshold, Thread.yield() above it) under enough contention that some threads are
@@ -232,6 +283,64 @@ class RateLimiterPatternTest {
     }
 
     @Test
+    void should_returnIncrementedRetryCount_when_backingOffBelowAndAboveSpinThreshold() throws Exception {
+        // backOff() is private/static with no externally observable effect besides its return
+        // value (Thread.onSpinWait()/Thread.yield() are unobservable), so both branches are
+        // exercised directly via reflection rather than through real CAS contention: hitting the
+        // yield branch via actual thread scheduling is scheduler-timing-dependent and was
+        // observed to flake the coverage of that branch across otherwise-identical test runs.
+        var backOffMethod = RateLimiter.class.getDeclaredMethod("backOff", int.class);
+        backOffMethod.setAccessible(true);
+        var thresholdField = RateLimiter.class.getDeclaredField("CAS_SPIN_RETRY_THRESHOLD");
+        thresholdField.setAccessible(true);
+        var threshold = (int) thresholdField.get(null);
+
+        assertThat((int) backOffMethod.invoke(null, 0))
+                .as("below the spin threshold, backOff still returns the incremented retry count")
+                .isEqualTo(1);
+        assertThat((int) backOffMethod.invoke(null, threshold))
+                .as("above the spin threshold, backOff escalates to Thread.yield() but still "
+                        + "returns the incremented retry count")
+                .isEqualTo(threshold + 1);
+    }
+
+    @Test
+    void should_throwInterruptedException_when_checkedWhileThreadIsInterrupted() throws Exception {
+        // checkNotInterruptedWhileSpinning() is private, invoked directly via reflection since
+        // real CAS contention cannot deterministically guarantee a spinning thread observes its
+        // own interrupt at a given point in time.
+        var checkMethod = RateLimiter.class.getDeclaredMethod("checkNotInterruptedWhileSpinning");
+        checkMethod.setAccessible(true);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> invokeUnwrapped(checkMethod))
+                    .isInstanceOf(InterruptedException.class);
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("the check clears the interrupt status, same as Thread.sleep")
+                    .isFalse();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void should_notThrow_when_checkedWhileThreadIsNotInterrupted() throws Exception {
+        var checkMethod = RateLimiter.class.getDeclaredMethod("checkNotInterruptedWhileSpinning");
+        checkMethod.setAccessible(true);
+
+        assertThatCode(() -> invokeUnwrapped(checkMethod)).doesNotThrowAnyException();
+    }
+
+    private static void invokeUnwrapped(Method method) throws Throwable {
+        try {
+            method.invoke(null);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    @Test
     void should_throwNullPointerException_when_listenerIsNull() {
         assertThatNullPointerException()
             .isThrownBy(() -> RateLimiter.<String>of("rate-limiter", 1, PERIOD).withListener(null));
@@ -247,14 +356,15 @@ class RateLimiterPatternTest {
 
     @Test
     void should_rejectInvalidConfiguration_when_constructed() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",0, PERIOD));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, Duration.ZERO));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatIllegalArgumentException().isThrownBy(() ->
             RateLimiter.<String>of("rate-limiter",1, PERIOD).withMaxWait(Duration.ofMillis(-1)));
-        assertThrows(NullPointerException.class, () ->
-            RateLimiter.<String>of("rate-limiter",1, null));
+        assertThatNullPointerException()
+            .isThrownBy(() ->
+                RateLimiter.<String>of("rate-limiter",1, null));
     }
 
     @Test
@@ -323,7 +433,15 @@ class RateLimiterPatternTest {
      * limiter sleeps, so waits complete instantly.
      */
     private static final class ManualClock implements Clock {
-        private Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        private Instant now;
+
+        ManualClock() {
+            this(Instant.parse("2026-01-01T00:00:00Z"));
+        }
+
+        ManualClock(Instant now) {
+            this.now = now;
+        }
 
         @Override
         public synchronized Instant instant() {

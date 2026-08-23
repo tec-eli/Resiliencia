@@ -176,6 +176,18 @@ Hierarchy: `ResilientException` (base) extends `RuntimeException`, with `RetryEx
 - Use parameterized messages: `log.debug("Order {} created", orderId)` — never string concatenation
 - Log at appropriate levels: `DEBUG` internals, `INFO` business events, `WARN` recoverable issues, `ERROR` failures
 
+### Comments
+
+- Never point a comment at another file — no `// see docs/architecture/...md`, no `// see FooClass.java`, no
+  `// mirrors Bar.baz()`. A reader with the file open shouldn't have to go open something else to get the "why."
+  State the rationale inline, briefly, or don't state it at all.
+- `{@link}`/`{@code}` Javadoc references to another symbol in the same module are fine (they're navigable and
+  compiler-checked) — the rule is about prose pointers to file paths or other source files, not about Javadoc
+  cross-references.
+- If a design decision is genuinely too long to state briefly in code, it belongs in
+  `docs/architecture/**/*.md` on its own, written to stand alone — not paired with a pointer comment in the code.
+  The doc and the code should each make sense without the other.
+
 ---
 
 ## Unit Tests

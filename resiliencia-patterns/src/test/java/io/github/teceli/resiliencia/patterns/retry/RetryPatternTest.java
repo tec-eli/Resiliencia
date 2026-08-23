@@ -164,6 +164,13 @@ class RetryPatternTest {
     }
 
     @Test
+    void should_reportHasOwnDeadline_when_overallDeadlineConfiguredWithLongMaxValue() {
+        var withDeadline = Retry.<String>create("retry-under-test").withOverallDeadline(Long.MAX_VALUE);
+
+        assertThat(withDeadline.hasOwnDeadline()).isTrue();
+    }
+
+    @Test
     void should_emitEvents_when_retryOccurs() {
         var counter = new AtomicInteger(0);
         var events = new ArrayList<RetryEvent>();
