@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   actions: read
+  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,6 +42,12 @@ jobs:
         with:
           upload: false
           output: sarif-results
+
+      - name: Upload SARIF results to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3
+        with:
+          sarif_file: sarif-results
 
       - name: Upload SARIF results as artifact
         if: always()
