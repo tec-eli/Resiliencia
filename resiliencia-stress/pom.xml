@@ -12,6 +12,11 @@
     <artifactId>resiliencia-stress</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Stress Tests</name>
+    <description>jcstress concurrency tests verifying CircuitBreaker, Bulkhead, and RateLimiter thread-safety
+        under contention. Not published to Maven Central.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
