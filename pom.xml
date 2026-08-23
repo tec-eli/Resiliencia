@@ -152,11 +152,12 @@
 
             <!--
                 Publishes to Sonatype's Central Publisher Portal (the OSSRH/Nexus staging flow it
-                replaces is sunset). extensions=true makes it the deployment mechanism for `mvn deploy`;
-                per-module publishing is controlled by the existing maven.deploy.skip flags, which it
-                honors the same as the default deploy provider. autoPublish is deliberately false: a
-                deployment lands as a staged, reviewable bundle in the Portal and must be published
-                manually, since Central artifacts are immutable once released.
+                replaces is sunset). extensions=true makes it the deployment mechanism for `mvn deploy`.
+                maven.deploy.skip has no effect on this plugin (a known gap: it aggregates the whole
+                reactor into one bundle regardless of that flag), so modules that aren't ready to
+                publish are excluded explicitly via excludeArtifacts instead. autoPublish is
+                deliberately false: a deployment lands as a staged, reviewable bundle in the Portal and
+                must be published manually, since Central artifacts are immutable once released.
             -->
             <plugin>
                 <groupId>org.sonatype.central</groupId>
@@ -166,6 +167,13 @@
                 <configuration>
                     <publishingServerId>central</publishingServerId>
                     <autoPublish>false</autoPublish>
+                    <excludeArtifacts>
+                        <excludeArtifact>resiliencia-spring</excludeArtifact>
+                        <excludeArtifact>resiliencia-quarkus</excludeArtifact>
+                        <excludeArtifact>resiliencia-micronaut</excludeArtifact>
+                        <excludeArtifact>resiliencia-stress</excludeArtifact>
+                        <excludeArtifact>resiliencia-examples</excludeArtifact>
+                    </excludeArtifacts>
                 </configuration>
             </plugin>
         </plugins>
