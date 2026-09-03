@@ -1,0 +1,117 @@
+---
+sidebar_position: 1
+title: Getting started
+description: Add resiliencia-core and resiliencia-patterns, then wrap your first call in a Retry.
+---
+
+Add `resiliencia-core` and `resiliencia-patterns`, then wrap your first call in a `Retry`.
+
+<div className="section-lede">
+  There's no framework integration and no runtime magic — every pattern is a plain, immutable object you
+  configure once and reuse. This guide covers the two modules you need for that: <code>resiliencia-core</code>{' '}
+  (the <code>Resilient</code> contract) and <code>resiliencia-patterns</code> (Retry, Timeout, CircuitBreaker,
+  Bulkhead, RateLimiter).
+</div>
+
+<div className="detail-block">
+
+## Add the dependencies
+
+The project is currently pre-release (`1.0.0-beta.1`), so these coordinates aren't published to Maven Central
+yet — build and install locally from source (`mvn install`) if you want to depend on them today.
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-core</artifactId>
+  <version>1.0.0-beta.1</version>
+</dependency>
+<dependency>
+  <groupId>io.github.teceli</groupId>
+  <artifactId>resiliencia-patterns</artifactId>
+  <version>1.0.0-beta.1</version>
+</dependency>
+```
+
+Both modules have zero external dependencies — `resiliencia-patterns` only needs `resiliencia-core` and
+SLF4J for logging. Nothing else gets pulled onto your classpath.
+
+</div>
+
+<div className="detail-block">
+
+## Configure a Retry
+
+`Retry.create(name)` returns an instance configured with sensible defaults — up to 3 attempts, 100ms initial
+delay, doubling backoff. Refine it with `withX` methods; each one returns a new, independently usable
+`Retry`, so the original is never mutated:
+
+```java
+import io.github.teceli.resiliencia.patterns.retry.Retry;
+
+var retry = Retry.<String>create("fetch-order")
+        .withMaxAttempts(3)
+        .withInitialDelay(100)
+        .withBackoffMultiplier(2.0)
+        .withShouldRetry(e -> e instanceof java.io.IOException);
+```
+
+By default, `Retry` only retries `IOException` and its subclasses — the assumption is that those are
+transient (network errors, timeouts, connection resets), while everything else is a permanent failure.
+Pass your own predicate to `withShouldRetry` to change that.
+
+</div>
+
+<div className="detail-block">
+
+## Wrap a call
+
+`Retry` implements `Resilient<T>`, the same interface every pattern implements. Call `call(...)` to get a
+result or an exception, or `outcome(...)` if you'd rather not deal with exceptions at all:
+
+```java
+var order = retry.call(() -> api.fetchOrder(orderId));
+```
+
+If every attempt fails, `call` throws one of three unchecked exceptions depending on why the loop stopped:
+`RetryExhaustedException` (ran out of attempts or hit the overall deadline), `RetryRejectedException` (the
+exception didn't pass `shouldRetry`), or `RetryInterruptedException` (the thread was interrupted during a
+backoff wait). All three — like every resiliencia exception — extend `ResilientException`, so you can catch
+that one type if you don't need to distinguish them:
+
+```java
+try {
+    var order = retry.call(() -> api.fetchOrder(orderId));
+} catch (ResilientException e) {
+    log.warn("Could not fetch order {}", orderId, e);
+}
+```
+
+Prefer not to use exceptions for control flow? `outcome(...)` never throws for a recorded failure — it
+always returns a `Success`, `Failure`, or `TimedOut`:
+
+```java
+var result = retry.outcome(() -> api.fetchOrder(orderId));
+switch (result) {
+    case Outcome.Success<Order>(var value) -> log.info("Got order {}", value);
+    case Outcome.Failure<Order>(var cause) -> log.warn("Failed after retries", cause);
+    case Outcome.TimedOut<Order> ignored -> log.warn("Timed out");
+}
+```
+
+</div>
+
+<div className="detail-block">
+
+## Next steps
+
+This is enough to retry a single call. From here:
+
+- **[Composing a Policy](./policy-composition)** — chain `Retry` with `CircuitBreaker` and `Timeout` in one
+  explicit, validated order via `resiliencia-compose`.
+- **[Testing with ManualClock](./testing-manual-clock)** — drive retries and timeouts deterministically in
+  tests, with `resiliencia-test`'s `ManualClock`, instead of real `Thread.sleep` delays.
+- **[Metrics with Micrometer](./metrics-micrometer)** — wire pattern and Policy events into Micrometer
+  counters, gauges and timers with `resiliencia-metrics` and `resiliencia-micrometer`.
+
+</div>

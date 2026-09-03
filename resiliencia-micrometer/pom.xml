@@ -12,6 +12,9 @@
     <artifactId>resiliencia-micrometer</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Micrometer</name>
+    <description>Micrometer MeterRegistry integration for resiliencia-metrics.</description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>

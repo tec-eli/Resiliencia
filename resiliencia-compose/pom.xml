@@ -12,6 +12,11 @@
     <artifactId>resiliencia-compose</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Compose</name>
+    <description>Policy: fluent composition of resiliencia patterns into a single reusable, order-validated
+        execution pipeline. Zero external dependencies beyond slf4j-api.
+    </description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>

@@ -12,6 +12,9 @@
     <artifactId>resiliencia-examples</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Examples</name>
+    <description>Usage examples for the resiliencia library. Not published to Maven Central.</description>
+
     <scm>
         <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
         <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
