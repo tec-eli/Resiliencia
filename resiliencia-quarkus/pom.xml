@@ -50,7 +50,7 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-arc</artifactId>
-            <version>3.37.2</version>
+            <version>3.39.1</version>
         </dependency>
 
         <dependency>
