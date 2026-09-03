@@ -4,27 +4,37 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.teceli</groupId>
+        <groupId>io.github.tec-eli</groupId>
         <artifactId>resiliencia</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-beta.1</version>
     </parent>
 
     <artifactId>resiliencia-micrometer</artifactId>
     <packaging>jar</packaging>
 
+    <name>Resiliencia :: Micrometer</name>
+    <description>Micrometer MeterRegistry integration for resiliencia-metrics.</description>
+
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <dependencies>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-metrics</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-patterns</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -32,6 +42,17 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
             <version>1.17.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

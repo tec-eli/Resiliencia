@@ -1,8 +1,6 @@
 name: Trivy Vulnerability Scan
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:
@@ -12,13 +10,18 @@ on:
 permissions:
   contents: read
   actions: read
+  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   trivy-scan:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -30,9 +33,15 @@ jobs:
           output: trivy-results.sarif
           severity: 'CRITICAL,HIGH'
 
+      - name: Upload SARIF results to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3
+        with:
+          sarif_file: trivy-results.sarif
+
       - name: Upload SARIF results as artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-results
           path: trivy-results.sarif

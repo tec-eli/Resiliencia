@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a run in flight: a partially completed Maven Central publish cannot be undone.
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      # Fails fast if someone pushes a tag that doesn't match the pom version, instead of
+      # publishing an artifact under the wrong coordinates (which can't be undone on Central).
+      - name: Verify tag matches project version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          POM_VERSION="$(mvn -q org.apache.maven.plugins:maven-help-plugin:3.5.1:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$TAG_VERSION" != "$POM_VERSION" ]; then
+            echo "Tag v$TAG_VERSION does not match project version $POM_VERSION" >&2
+            exit 1
+          fi
+
+      # Runs the full reactor: modules flagged maven.deploy.skip=true (spring, quarkus,
+      # micronaut, stress, examples) build and test but are not uploaded. -P release activates
+      # GPG signing. central-publishing-maven-plugin stages the bundle in the Central Publisher
+      # Portal; autoPublish=false means it still needs a manual "Publish" click there.
+      - name: Build, sign and stage on Central
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: mvn -B -P release clean deploy

@@ -1,12 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+        child.project.url.inherit.append.path="false">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.github.teceli</groupId>
+    <groupId>io.github.tec-eli</groupId>
     <artifactId>resiliencia</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0-beta.1</version>
     <packaging>pom</packaging>
+
+    <name>resiliencia</name>
+    <description>A modular resilience patterns library for Java 21+, built on virtual threads and the Java Module
+        System: Retry, Timeout, CircuitBreaker, Bulkhead, RateLimiter, and fluent policy composition.
+    </description>
+    <url>https://github.com/tec-eli/resiliencia</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>tec-eli</id>
+            <name>Eliana Moran</name>
+            <email>tec-eli@users.noreply.github.com</email>
+            <url>https://github.com/tec-eli</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <modules>
         <module>resiliencia-core</module>
@@ -40,8 +71,26 @@
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <spotbugs-maven-plugin.version>4.8.6.6</spotbugs-maven-plugin.version>
-        <pmd-maven-plugin.version>3.25.0</pmd-maven-plugin.version>
+        <pmd-maven-plugin.version>3.28.0</pmd-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
+        <central-publishing-maven-plugin.version>0.10.0</central-publishing-maven-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+
+        <!--
+            resiliencia-examples and resiliencia-stress carry no unit tests by design (see their
+            jacoco.skip properties): examples is illustrative usage code, stress is a jcstress
+            harness. Without this, SonarCloud counts their source lines as uncovered, dragging
+            down the coverage metric for modules that were never meant to have coverage.
+        -->
+        <sonar.coverage.exclusions>resiliencia-examples/src/main/**,resiliencia-stress/src/main/**</sonar.coverage.exclusions>
+
+        <!--
+            site/static/apidocs is committed, generated Oracle JDK javadoc-tool output (regenerated
+            and overwritten on every page deploy via javadoc:aggregate, see .github/workflows/pages.yml).
+            It is not project source, so Sonar's HTML/JS rules on it (e.g. the tool's own `<html lang>`
+            with no value, its `var`-based scripts) are not actionable findings.
+        -->
+        <sonar.exclusions>site/static/apidocs/**</sonar.exclusions>
     </properties>
 
     <dependencyManagement>
@@ -90,6 +139,43 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+            </plugin>
+
+            <!--
+                Publishes to Sonatype's Central Publisher Portal (the OSSRH/Nexus staging flow it
+                replaces is sunset). extensions=true makes it the deployment mechanism for `mvn deploy`.
+                maven.deploy.skip has no effect on this plugin (a known gap: it aggregates the whole
+                reactor into one bundle regardless of that flag), so modules that aren't ready to
+                publish are excluded explicitly via excludeArtifacts instead. autoPublish is
+                deliberately false: a deployment lands as a staged, reviewable bundle in the Portal and
+                must be published manually, since Central artifacts are immutable once released.
+            -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>${central-publishing-maven-plugin.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                    <autoPublish>false</autoPublish>
+                    <excludeArtifacts>
+                        <excludeArtifact>resiliencia-spring</excludeArtifact>
+                        <excludeArtifact>resiliencia-quarkus</excludeArtifact>
+                        <excludeArtifact>resiliencia-micronaut</excludeArtifact>
+                        <excludeArtifact>resiliencia-stress</excludeArtifact>
+                        <excludeArtifact>resiliencia-examples</excludeArtifact>
+                    </excludeArtifacts>
+                </configuration>
+            </plugin>
         </plugins>
 
         <pluginManagement>
@@ -132,6 +218,7 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
+                        <bottom>Copyright &#169; 2026 Resiliencia. All rights reserved.</bottom>
                     </configuration>
                     <executions>
                         <execution>
@@ -165,5 +252,34 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <!--
+            Activated explicitly (-P release) by the release workflow only. Signing is gated behind
+            a profile rather than bound unconditionally so that local `mvn install`/`mvn verify`
+            (which run the `verify` phase) don't fail for contributors without a GPG key configured.
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

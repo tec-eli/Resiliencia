@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.examples;
 
 import io.github.teceli.resiliencia.compose.Policy;
+import io.github.teceli.resiliencia.core.api.ResilientException;
 import io.github.teceli.resiliencia.patterns.retry.Retry;
 import io.github.teceli.resiliencia.patterns.retry.RetryEvent;
 import org.slf4j.Logger;
@@ -63,7 +64,7 @@ public class RetryExample {
             });
             log.info(RESULT, result);
             log.info(TOTAL_ATTEMPTS, counter.value);
-        } catch (Exception e) {
+        } catch (ResilientException e) {
             log.warn(EXCEPTION, e.getMessage());
         }
     }
@@ -86,7 +87,7 @@ public class RetryExample {
                 throw new RuntimeException("Always fails (attempt " + counter.value + ")");
             });
             log.info(RESULT, result);
-        } catch (Exception e) {
+        } catch (ResilientException e) {
             log.warn(EXCEPTION, e.getMessage());
             log.info(TOTAL_ATTEMPTS, counter.value);
         }
@@ -126,7 +127,7 @@ public class RetryExample {
                 return "Success!";
             });
             log.info(RESULT, result);
-        } catch (Exception e) {
+        } catch (ResilientException e) {
             log.warn(EXCEPTION, e.getMessage());
         }
     }

@@ -1,6 +1,7 @@
 package io.github.teceli.resiliencia.compose;
 
 import io.github.teceli.resiliencia.core.api.PatternKind;
+import io.github.teceli.resiliencia.core.api.Resilient;
 import io.github.teceli.resiliencia.core.spi.ResilienceEvent;
 
 import java.time.Instant;

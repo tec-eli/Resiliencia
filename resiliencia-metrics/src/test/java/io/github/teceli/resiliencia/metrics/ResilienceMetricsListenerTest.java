@@ -20,14 +20,17 @@ import io.github.teceli.resiliencia.patterns.timeout.TimeoutEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -35,6 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+@ExtendWith(MockitoExtension.class)
 class ResilienceMetricsListenerTest {
 
     @Mock
@@ -44,7 +48,6 @@ class ResilienceMetricsListenerTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
         listener = new ResilienceMetricsListener(metrics);
     }
 
@@ -397,6 +400,127 @@ class ResilienceMetricsListenerTest {
             listener.onEvent(new RetryEvent.AttemptFailed(Instant.now(), "r4", 1, error4));
 
             verify(metrics, times(4)).observe(any(Counters.class));
+        }
+
+        @Test
+        void should_useAllowlistedAncestorName_when_thrownExceptionIsSubtypeOfAllowlistedClass() {
+            var allowlist = Set.<Class<? extends Throwable>>of(java.io.IOException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new java.io.FileNotFoundException("missing");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("subtype matching should tag with the allowlisted ancestor's name, not the thrown "
+                    + "exception's own runtime class name, so cardinality stays bounded by allowlist size")
+                .isEqualTo("IOException");
+        }
+
+        @Test
+        void should_useMostSpecificAllowlistedAncestor_when_thrownExceptionMatchesMultipleAllowlistedAncestors() {
+            var allowlist = Set.<Class<? extends Throwable>>of(RuntimeException.class, IllegalStateException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new IllegalStateException("test");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("the most specific matching allowlisted ancestor should be used, not the broader one")
+                .isEqualTo("IllegalStateException");
+        }
+
+        @Test
+        void should_useBucket_other_when_thrownExceptionIsSupertypeOfAllowlistedClass() {
+            var allowlist = Set.<Class<? extends Throwable>>of(IllegalStateException.class);
+            listener = new ResilienceMetricsListener(metrics, allowlist);
+            var error = new RuntimeException("test");
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1, error);
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            var attemptFailed = (RetryCounters.AttemptFailed) captor.getValue();
+            assertThat(attemptFailed.cause())
+                .as("a broader exception thrown where only a narrower subtype is allowlisted should not match")
+                .isEqualTo("other");
+        }
+    }
+
+    @Nested
+    class ConstructorNullHandling {
+        @Test
+        void should_notThrow_when_metricsArgumentIsNull() {
+            assertThatCode(() -> new ResilienceMetricsListener(null)).doesNotThrowAnyException();
+        }
+
+        @Test
+        void should_swallowSilently_when_metricsIsNullAndEventEmitted() {
+            var nullMetricsListener = new ResilienceMetricsListener(null);
+            var event = new RetryEvent.AttemptFailed(Instant.now(), "myRetry", 1,
+                new RuntimeException("boom"));
+
+            assertThatCode(() -> nullMetricsListener.onEvent(event))
+                .as("safeObserve() wraps every backend call in try/catch, so the NullPointerException from a null "
+                    + "metrics reference is caught and logged, not propagated to the caller")
+                .doesNotThrowAnyException();
+        }
+
+        @Test
+        void should_throwNullPointerException_when_causeAllowlistIsNull() {
+            assertThatThrownBy(() -> new ResilienceMetricsListener(metrics, null))
+                .as("this NullPointerException originates from Set.copyOf(null) inside the constructor, not from "
+                    + "an explicit Objects.requireNonNull guard")
+                .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Nested
+    class NullNameHandling {
+        @Test
+        void should_forwardEventWithNullName_when_sourceEventHasNullName() {
+            var event = new RetryEvent.AttemptFailed(Instant.now(), null, 1, new RuntimeException("boom"));
+
+            listener.onEvent(event);
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics).observe(captor.capture());
+            assertThat(captor.getValue()).isInstanceOf(RetryCounters.AttemptFailed.class);
+            assertThat(((RetryCounters.AttemptFailed) captor.getValue()).name())
+                .as("neither the source event nor the Counters record it maps to validates the name, so a null "
+                    + "name flows through untouched instead of being rejected")
+                .isNull();
+        }
+    }
+
+    @Nested
+    class NameCardinality {
+        @Test
+        void should_forwardEveryDistinctName_when_manyUniqueNamesObserved() {
+            var uniqueNameCount = 500;
+            for (var i = 0; i < uniqueNameCount; i++) {
+                listener.onEvent(new RetryEvent.AttemptFailed(Instant.now(), "retry-" + i, 1,
+                    new RuntimeException("boom")));
+            }
+
+            var captor = org.mockito.ArgumentCaptor.forClass(RetryCounters.class);
+            verify(metrics, times(uniqueNameCount)).observe(captor.capture());
+            var distinctNames = captor.getAllValues().stream()
+                .map(counters -> ((RetryCounters.AttemptFailed) counters).name())
+                .distinct()
+                .count();
+            assertThat(distinctNames)
+                .as("unlike the cause tag, which is bounded by causeAllowlist (see CardinalityControl above), "
+                    + "the listener applies no bound to the name dimension — every distinct name is forwarded as-is")
+                .isEqualTo(uniqueNameCount);
         }
     }
 

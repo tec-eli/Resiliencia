@@ -4,13 +4,25 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.teceli</groupId>
+        <groupId>io.github.tec-eli</groupId>
         <artifactId>resiliencia</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-beta.1</version>
     </parent>
 
     <artifactId>resiliencia-core</artifactId>
     <packaging>jar</packaging>
+
+    <name>Resiliencia :: Core</name>
+    <description>Foundational types for the resiliencia library: the Resilient execution contract, the sealed
+        Outcome result type, the exception hierarchy, and the pattern/metrics SPI. Zero external dependencies.
+    </description>
+
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <dependencies>
         <dependency>
@@ -25,5 +37,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

@@ -4,13 +4,25 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.teceli</groupId>
+        <groupId>io.github.tec-eli</groupId>
         <artifactId>resiliencia</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-beta.1</version>
     </parent>
 
     <artifactId>resiliencia-stress</artifactId>
     <packaging>jar</packaging>
+
+    <name>Resiliencia :: Stress Tests</name>
+    <description>jcstress concurrency tests verifying CircuitBreaker, Bulkhead, and RateLimiter thread-safety
+        under contention. Not published to Maven Central.
+    </description>
+
+    <scm>
+        <connection>scm:git:https://github.com/tec-eli/resiliencia.git</connection>
+        <developerConnection>scm:git:https://github.com/tec-eli/resiliencia.git</developerConnection>
+        <url>https://github.com/tec-eli/resiliencia</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -20,7 +32,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.github.teceli</groupId>
+            <groupId>io.github.tec-eli</groupId>
             <artifactId>resiliencia-patterns</artifactId>
             <version>${project.version}</version>
         </dependency>

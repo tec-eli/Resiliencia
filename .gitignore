@@ -51,3 +51,9 @@ build/
 ### GitHub Page ###
 
 ./_site
+/site/node_modules/
+/site/.docusaurus/
+
+### Docusaurus site (site/) ###
+node_modules/
+.docusaurus/
