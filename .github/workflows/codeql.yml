@@ -38,7 +38,7 @@ jobs:
         run: mvn -B -DskipTests compile
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v3
         with:
           upload: false
           output: sarif-results
