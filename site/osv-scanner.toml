@@ -1,0 +1,9 @@
+[[IgnoredVulns]]
+id = "GHSA-5p2g-fcmc-qvqq"
+ignoreUntil = 2026-11-23
+reason = "image-size (transitive, via @docusaurus/mdx-loader) DoS in the JXL/HEIF parser. No fixed version exists yet. Only reachable at docs build time against images committed by trusted contributors, not attacker-controlled input."
+
+[[IgnoredVulns]]
+id = "GHSA-w3rx-r6r6-pgpr"
+ignoreUntil = 2026-11-23
+reason = "image-size (transitive, via @docusaurus/mdx-loader) DoS in the ICNS parser. No fixed version exists yet. Only reachable at docs build time against images committed by trusted contributors, not attacker-controlled input."
