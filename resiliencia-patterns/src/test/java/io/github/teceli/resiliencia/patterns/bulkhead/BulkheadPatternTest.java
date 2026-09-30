@@ -9,12 +9,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -397,5 +399,21 @@ class BulkheadPatternTest {
             }
             Thread.onSpinWait();
         }
+    }
+
+    @Test
+    void should_releasePermit_when_listenerThrowsErrorOnPermitted() {
+        var firstEvent = new AtomicBoolean(true);
+        var bulkhead = Bulkhead.<String>of("test", 1)
+                .withListener(event -> {
+                    if (event instanceof BulkheadEvent.Permitted && firstEvent.getAndSet(false)) {
+                        throw new AssertionError("listener failure");
+                    }
+                });
+
+        assertThatThrownBy(() -> bulkhead.call(() -> "first")).isInstanceOf(AssertionError.class);
+        var result = bulkhead.call(() -> "second");
+
+        assertThat(result).isEqualTo("second");
     }
 }
