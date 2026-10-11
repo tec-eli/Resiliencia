@@ -58,13 +58,21 @@ call, so the winning failure is not necessarily the first trial call that was ad
 
 The other admitted trial calls are never aborted: the breaker has no cancellation mechanism for a call it has
 already let through, so every admitted trial call always runs to completion regardless of what the state does in
-the meantime. Each one is still recorded into the sliding window and reported via `CallRecorded` — that bookkeeping
-happens unconditionally, before the current state is even consulted. What changes is only what happens *after* the
-recording: once the shared HalfOpen state has already been swapped out by the winning failure, any other trial
-call's own attempt to act on its outcome against that same, now-stale state fails its compare-and-swap and is a
-no-op — whether that other outcome was itself a failure (no second `Opened` event, `openedAt` is not pushed later by
-a straggler) or a success (it does not spuriously count toward closing a circuit that is already Open). Exactly one
-`Opened` event is emitted per HalfOpen episode, no matter how many admitted trial calls fail.
+the meantime. Every admitted call remembers the state generation that admitted it, and its outcome is only
+attributed to that generation. If the circuit has since moved on, the call is *stale*: a call admitted while Closed
+that finishes after the circuit went Open and HalfOpen, or a trial call whose HalfOpen episode already ended. A stale
+call is not added to the sliding window and never evaluates a transition, so it can neither close nor reopen a
+generation in which it never held a permit. A call still in its own generation whose shared state was already swapped
+out by the winning failure fails its compare-and-swap and is a no-op — whether that outcome was itself a failure (no
+second `Opened` event, `openedAt` is not pushed later by a straggler) or a success (it does not spuriously count
+toward closing a circuit that is already Open). Exactly one `Opened` event is emitted per HalfOpen episode, no matter
+how many admitted trial calls fail.
+
+A stale call is still reported via `CallRecorded`, with its real outcome and elapsed time, because the call really
+happened: every call that runs emits exactly one `CallRecorded`. For metrics this means the call counter and the
+duration timer count every call, stale ones included, while the failure-rate gauge and every breaker decision only
+consider the sliding window, which holds calls of the current generation. The counters therefore never reconcile
+with the window, which only covers the last N calls anyway.
 
 This is the same single-permit-per-trial admission model as the Closed race, mirrored rather than contradicted:
 calls that make their first admission check only after the flip to Open see Open and are rejected (or start

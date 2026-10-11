@@ -896,6 +896,114 @@ class CircuitBreakerPatternTest {
                 .isZero();
     }
 
+    @Test
+    void should_notCloseCircuit_when_callAdmittedWhileClosedSucceedsDuringHalfOpen() throws Exception {
+        // Arrange
+        var clock = new ManualClock();
+        var circuitBreaker = baseCircuitBreaker(clock).withPermittedCallsInHalfOpenState(1);
+        var straggler = startBlockedCall(circuitBreaker, false);
+        openCircuit(circuitBreaker);
+        clock.advance(WAIT_DURATION);
+        var probe = startBlockedCall(circuitBreaker, false);
+
+        // Act
+        straggler.release();
+
+        // Assert
+        assertThat(circuitBreaker.state()).isEqualTo(new CircuitState.HalfOpen(1, 0));
+        probe.release();
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_notReopenCircuit_when_callAdmittedWhileClosedFailsDuringHalfOpen() throws Exception {
+        // Arrange
+        var clock = new ManualClock();
+        var circuitBreaker = baseCircuitBreaker(clock).withPermittedCallsInHalfOpenState(1);
+        var straggler = startBlockedCall(circuitBreaker, true);
+        openCircuit(circuitBreaker);
+        clock.advance(WAIT_DURATION);
+        var probe = startBlockedCall(circuitBreaker, false);
+
+        // Act
+        straggler.release();
+
+        // Assert
+        assertThat(circuitBreaker.state()).isEqualTo(new CircuitState.HalfOpen(1, 0));
+        probe.release();
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_keepNewGenerationWindowClean_when_staleCallFailsAfterCircuitClosedAgain() throws Exception {
+        // Arrange
+        var clock = new ManualClock();
+        var circuitBreaker = baseCircuitBreaker(clock).withPermittedCallsInHalfOpenState(1);
+        var straggler = startBlockedCall(circuitBreaker, true);
+        openCircuit(circuitBreaker);
+        clock.advance(WAIT_DURATION);
+        circuitBreaker.outcome(() -> "probe");
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+
+        // Act
+        straggler.release();
+        circuitBreaker.outcome(() -> "ok");
+
+        // Assert: had the stale failure entered the window, failure + success would fill it at 50%
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_stillEmitCallRecorded_when_callOutlivesItsGeneration() throws Exception {
+        // Arrange
+        var clock = new ManualClock();
+        var recorded = new AtomicInteger();
+        var circuitBreaker = baseCircuitBreaker(clock)
+                .withPermittedCallsInHalfOpenState(1)
+                .withListener(event -> {
+                    if (event instanceof CircuitBreakerEvent.CallRecorded) {
+                        recorded.incrementAndGet();
+                    }
+                });
+        var straggler = startBlockedCall(circuitBreaker, false);
+        openCircuit(circuitBreaker);
+        var recordedBeforeStraggler = recorded.get();
+
+        // Act
+        straggler.release();
+
+        // Assert
+        assertThat(recorded.get()).isEqualTo(recordedBeforeStraggler + 1);
+    }
+
+    /**
+     * Starts a call on a virtual thread that blocks inside the operation until {@link
+     * BlockedCall#release()} and then either returns or throws, and returns once it is admitted
+     * and running.
+     */
+    private static BlockedCall startBlockedCall(CircuitBreaker<String> circuitBreaker, boolean failing)
+            throws InterruptedException {
+        var inside = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var thread = Thread.ofVirtual().start(() -> circuitBreaker.outcome(() -> {
+            inside.countDown();
+            awaitQuietly(release);
+            if (failing) {
+                throw new IllegalStateException("late failure");
+            }
+            return "late success";
+        }));
+        assertThat(inside.await(5, TimeUnit.SECONDS)).isTrue();
+        return new BlockedCall(release, thread);
+    }
+
+    private record BlockedCall(CountDownLatch gate, Thread thread) {
+        void release() throws InterruptedException {
+            gate.countDown();
+            thread.join(Duration.ofSeconds(5));
+        }
+    }
+
     /**
      * A fresh, Closed CircuitBreaker configured with a window of size 2 and a 50% failure-rate
      * threshold, using the given clock. Apply further {@code withX} calls (e.g. a listener)

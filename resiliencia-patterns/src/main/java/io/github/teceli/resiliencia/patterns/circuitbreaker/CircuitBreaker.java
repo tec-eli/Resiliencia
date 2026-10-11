@@ -290,23 +290,24 @@ public final class CircuitBreaker<T> implements Resilient<T> {
 
     @Override
     public Outcome<T> outcome(Operation<T> operation) {
-        var rejection = tryAcquirePermission();
-        if (rejection != null) {
-            return new Outcome.Failure<>(rejection);
+        var admission = tryAcquirePermission();
+        if (admission.rejection() != null) {
+            return new Outcome.Failure<>(admission.rejection());
         }
+        var admittedBy = admission.slot();
         var start = clock.instant();
         try {
             var result = operation.execute();
-            recordOutcome(testRecordOnResult(result), start);
+            recordOutcome(admittedBy, testRecordOnResult(result), start);
             return new Outcome.Success<>(result);
         } catch (Exception e) {
-            recordOutcome(isFailure(e), start);
+            recordOutcome(admittedBy, isFailure(e), start);
             return new Outcome.Failure<>(e);
         } catch (Error e) {
             // Not wrapped into Outcome, consistent with Timeout: an Error is not a business
             // outcome. Still recorded as a failed test call so a HalfOpen permit consumed
             // above is resolved instead of leaking the circuit's HalfOpen budget forever.
-            recordOutcome(true, start);
+            recordOutcome(admittedBy, true, start);
             throw e;
         }
     }
@@ -331,20 +332,21 @@ public final class CircuitBreaker<T> implements Resilient<T> {
      * Decide whether a call may proceed given the current state: always in Closed, never in
      * Open until {@code waitDurationInOpenState} has elapsed (which flips the state to HalfOpen
      * and retries), and up to {@code permittedCallsInHalfOpenState} times while HalfOpen.
-     * Returns {@code null} when the call is permitted, otherwise the exception to fail with.
+     * A permitted call carries the {@link StateSlot} that admitted it, so its outcome can later be
+     * attributed to that generation only; a rejected one carries the exception to fail with.
      */
-    private CircuitBreakerOpenException tryAcquirePermission() {
+    private Admission tryAcquirePermission() {
         var slot = current.get();
         return switch (slot.publicState) {
-            case CircuitState.Closed c -> null;
+            case CircuitState.Closed c -> Admission.permitted(slot);
             case CircuitState.Open open -> {
                 var deadline = openDeadline(open.openedAt());
                 var now = clock.instant();
                 if (now.isBefore(deadline)) {
                     emit(new CircuitBreakerEvent.Rejected(
                         clock.instant(), name, CircuitBreakerEvent.RejectingPhase.OPEN));
-                    yield CircuitBreakerOpenException.forOpenState(
-                        name, open.openedAt(), Duration.between(now, deadline));
+                    yield Admission.rejected(CircuitBreakerOpenException.forOpenState(
+                        name, open.openedAt(), Duration.between(now, deadline)));
                 }
                 if (current.compareAndSet(slot, new StateSlot(new CircuitState.HalfOpen(0, 0)))) {
                     emit(new CircuitBreakerEvent.HalfOpened(clock.instant(), name));
@@ -363,11 +365,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                     if (issued >= permittedCallsInHalfOpenState) {
                         emit(new CircuitBreakerEvent.Rejected(
                             clock.instant(), name, CircuitBreakerEvent.RejectingPhase.HALF_OPEN));
-                        yield CircuitBreakerOpenException.forHalfOpenState(name);
+                        yield Admission.rejected(CircuitBreakerOpenException.forHalfOpenState(name));
                     }
                     if (currentSlot.permitsIssued.compareAndSet(issued, issued + 1)
                             && current.get() == currentSlot) {
-                        yield null;
+                        yield Admission.permitted(currentSlot);
                     }
                 }
             }
@@ -375,21 +377,33 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     /**
-     * Record the outcome in the sliding window and emit {@code CallRecorded}, then let the
-     * current state decide what, if anything, changes: Closed checks the rate thresholds,
-     * HalfOpen checks this single test call. A concurrent Open (another thread just opened the
-     * circuit) has nothing left to evaluate.
+     * Record the outcome against the generation that admitted the call. A call that outlives its
+     * generation (the circuit changed state while it ran) is stale: it still emits
+     * {@code CallRecorded}, since the call really happened, but it never enters the sliding
+     * window or evaluates a transition, so it can neither close nor reopen a newer generation
+     * it never held a permit in. For a current call, the admitting state decides what changes:
+     * Closed checks the rate thresholds, HalfOpen checks this single test call, and Open (another
+     * thread just opened the circuit) has nothing left to evaluate.
+     *
+     * <p>The staleness check and the window write are not one atomic step; a transition landing
+     * between them can let one stale observation into the new window. State transitions stay
+     * safe because they are compare-and-swap against {@code admittedBy}.
      */
-    private void recordOutcome(boolean failed, Instant start) {
+    private void recordOutcome(StateSlot admittedBy, boolean failed, Instant start) {
         var elapsed = Duration.between(start, clock.instant());
         var slow = slowCallDurationThreshold != null && elapsed.compareTo(slowCallDurationThreshold) > 0;
-        window.observe(failed, slow);
+        var stale = current.get() != admittedBy;
+        if (!stale) {
+            window.observe(failed, slow);
+        }
         emit(new CircuitBreakerEvent.CallRecorded(clock.instant(), name, !failed, elapsed, window.failureRate()));
+        if (stale) {
+            return;
+        }
 
-        var slot = current.get();
-        switch (slot.publicState) {
-            case CircuitState.Closed closed -> evaluateFailureThresholds(slot);
-            case CircuitState.HalfOpen halfOpen -> evaluateHalfOpenOutcome(slot, failed);
+        switch (admittedBy.publicState) {
+            case CircuitState.Closed closed -> evaluateFailureThresholds(admittedBy);
+            case CircuitState.HalfOpen halfOpen -> evaluateHalfOpenOutcome(admittedBy, failed);
             case CircuitState.Open open -> { /* another thread already opened it; nothing to do */ }
         }
     }
@@ -558,6 +572,20 @@ public final class CircuitBreaker<T> implements Resilient<T> {
                 }
             }
             return (double) count / filledCount;
+        }
+    }
+
+    /**
+     * Result of {@link #tryAcquirePermission()}: exactly one of {@code slot} (the generation that
+     * admitted the call) or {@code rejection} is non-null.
+     */
+    private record Admission(StateSlot slot, CircuitBreakerOpenException rejection) {
+        static Admission permitted(StateSlot slot) {
+            return new Admission(slot, null);
+        }
+
+        static Admission rejected(CircuitBreakerOpenException rejection) {
+            return new Admission(null, rejection);
         }
     }
 
