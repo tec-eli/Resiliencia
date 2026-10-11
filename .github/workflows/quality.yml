@@ -51,5 +51,11 @@ jobs:
           !resiliencia-spring,!resiliencia-quarkus,!resiliencia-micronaut,!resiliencia-stress'
           org.apache.maven.plugins:maven-pmd-plugin:check
 
+      # Dependabot PRs can't read Actions secrets, so SONAR_TOKEN is empty and the scan can't authenticate.
       - name: Run Tests and SonarCloud Scan
+        if: github.actor != 'dependabot[bot]'
         run: mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=tec-eli_Resiliencia -Dsonar.organization=tec-eli
+
+      - name: Run Tests (Dependabot, no SonarCloud)
+        if: github.actor == 'dependabot[bot]'
+        run: mvn -B clean verify
