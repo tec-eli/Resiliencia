@@ -301,7 +301,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             recordOutcome(admittedBy, testRecordOnResult(result), start);
             return new Outcome.Success<>(result);
         } catch (Exception e) {
-            recordOutcome(admittedBy, isFailure(e), start);
+            if (isIgnored(e)) {
+                releaseHalfOpenPermit(admittedBy);
+            } else {
+                recordOutcome(admittedBy, isFailure(e), start);
+            }
             return new Outcome.Failure<>(e);
         } catch (Error e) {
             // Not wrapped into Outcome, consistent with Timeout: an Error is not a business
@@ -313,15 +317,37 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     /**
-     * Whether a thrown exception counts as a failure for rate purposes: {@code ignoreOn} takes
-     * precedence over {@code recordOn}. When {@code recordOn} is empty (the default), any
-     * exception counts — {@code outcome()} only calls this for {@code Exception}, never
-     * {@code Error}, so there is no need to special-case it here.
+     * Whether a thrown exception is never recorded: {@code ignoreOn} takes precedence over
+     * {@code recordOn}. An ignored call is neither a success nor a failure, so it stays out of
+     * the window, emits no {@code CallRecorded} and never evaluates a transition.
+     */
+    private boolean isIgnored(Throwable thrown) {
+        return ignoreOn.stream().anyMatch(type -> type.isInstance(thrown));
+    }
+
+    /**
+     * Gives back the HalfOpen permit an ignored call consumed, so another call can be the test
+     * call. Without this, a HalfOpen episode whose permits all went to ignored calls would
+     * reject every call forever. A call from an older generation holds no permit of the current
+     * one, so there is nothing to give back.
+     *
+     * <p>The generation check and the decrement are not one atomic step; a transition landing
+     * between them makes the decrement hit a slot that is already dead, which nothing reads
+     * again, so the new generation's permit budget is never affected.
+     */
+    private void releaseHalfOpenPermit(StateSlot admittedBy) {
+        if (admittedBy.publicState instanceof CircuitState.HalfOpen && current.get() == admittedBy) {
+            admittedBy.permitsIssued.decrementAndGet();
+        }
+    }
+
+    /**
+     * Whether a thrown, non-ignored exception counts as a failure for rate purposes. When
+     * {@code recordOn} is empty (the default), any exception counts — {@code outcome()} only
+     * calls this for {@code Exception}, never {@code Error}, so there is no need to
+     * special-case it here.
      */
     private boolean isFailure(Throwable thrown) {
-        if (ignoreOn.stream().anyMatch(type -> type.isInstance(thrown))) {
-            return false;
-        }
         if (!recordOn.isEmpty()) {
             return recordOn.stream().anyMatch(type -> type.isInstance(thrown));
         }

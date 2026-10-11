@@ -976,6 +976,93 @@ class CircuitBreakerPatternTest {
         assertThat(recorded.get()).isEqualTo(recordedBeforeStraggler + 1);
     }
 
+    @Test
+    void should_notRecordNorOpenCircuit_when_exceptionIsIgnored() {
+        // Arrange
+        var recorded = new AtomicInteger();
+        var circuitBreaker = baseCircuitBreaker(new ManualClock())
+                .withIgnoreOn(List.of(IllegalStateException.class))
+                .withListener(event -> {
+                    if (event instanceof CircuitBreakerEvent.CallRecorded) {
+                        recorded.incrementAndGet();
+                    }
+                });
+
+        // Act
+        var first = circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        var second = circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+
+        // Assert
+        assertThat(first).isInstanceOfSatisfying(Outcome.Failure.class,
+                f -> assertThat(f.cause()).isInstanceOf(IllegalStateException.class));
+        assertThat(second).isInstanceOf(Outcome.Failure.class);
+        assertThat(recorded.get()).isZero();
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_notDiluteFailureRate_when_ignoredCallsInterleaveWithFailures() {
+        // Arrange
+        var circuitBreaker = baseCircuitBreaker(new ManualClock())
+                .withIgnoreOn(List.of(IllegalArgumentException.class));
+
+        // Act
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+        circuitBreaker.outcome(() -> {
+            throw new IllegalArgumentException("ignored");
+        });
+        circuitBreaker.outcome(CircuitBreakerPatternTest::boom);
+
+        // Assert: had the ignored call counted as a success, the window would be 1 failure out of 2
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Open.class);
+    }
+
+    @Test
+    void should_releaseHalfOpenPermitAndStayHalfOpen_when_testCallThrowsIgnoredException() {
+        // Arrange
+        var clock = new ManualClock();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withPermittedCallsInHalfOpenState(1)
+                .withIgnoreOn(List.of(IllegalArgumentException.class)));
+        clock.advance(WAIT_DURATION);
+
+        // Act
+        var ignored = circuitBreaker.outcome(() -> {
+            throw new IllegalArgumentException("ignored");
+        });
+
+        // Assert
+        assertThat(ignored).isInstanceOf(Outcome.Failure.class);
+        assertThat(circuitBreaker.state()).isEqualTo(new CircuitState.HalfOpen(0, 0));
+        circuitBreaker.outcome(() -> "real test call");
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_notReleaseNewGenerationPermit_when_staleCallThrowsIgnoredException() throws Exception {
+        // Arrange
+        var clock = new ManualClock();
+        var circuitBreaker = baseCircuitBreaker(clock)
+                .withPermittedCallsInHalfOpenState(1)
+                .withIgnoreOn(List.of(IllegalStateException.class));
+        var straggler = startBlockedCall(circuitBreaker, true);
+        circuitBreaker.outcome(() -> {
+            throw new IllegalArgumentException("not ignored");
+        });
+        circuitBreaker.outcome(() -> {
+            throw new IllegalArgumentException("not ignored");
+        });
+        clock.advance(WAIT_DURATION);
+        var probe = startBlockedCall(circuitBreaker, false);
+
+        // Act
+        straggler.release();
+
+        // Assert
+        assertThat(circuitBreaker.state()).isEqualTo(new CircuitState.HalfOpen(1, 0));
+        probe.release();
+    }
+
     /**
      * Starts a call on a virtual thread that blocks inside the operation until {@link
      * BlockedCall#release()} and then either returns or throws, and returns once it is admitted

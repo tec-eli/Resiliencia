@@ -69,10 +69,11 @@ toward closing a circuit that is already Open). Exactly one `Opened` event is em
 how many admitted trial calls fail.
 
 A stale call is still reported via `CallRecorded`, with its real outcome and elapsed time, because the call really
-happened: every call that runs emits exactly one `CallRecorded`. For metrics this means the call counter and the
-duration timer count every call, stale ones included, while the failure-rate gauge and every breaker decision only
-consider the sliding window, which holds calls of the current generation. The counters therefore never reconcile
-with the window, which only covers the last N calls anyway.
+happened: every call that runs emits exactly one `CallRecorded`, except calls ignored via `ignoreOn`, which are never
+recorded. For metrics this means the call counter and the duration timer count every call, stale ones included,
+while the failure-rate gauge and every breaker decision only consider the sliding window, which holds calls of the
+current generation. The counters therefore never reconcile with the window, which only covers the last N calls
+anyway.
 
 This is the same single-permit-per-trial admission model as the Closed race, mirrored rather than contradicted:
 calls that make their first admission check only after the flip to Open see Open and are rejected (or start
@@ -95,6 +96,19 @@ closed regardless of outcomes.
 
 `recordOn` defines which exception types count as failures. `ignoreOn` defines which are never recorded. `ignoreOn`
 takes precedence — an exception matched by both is ignored.
+
+When `recordOn` is set, an exception that matches neither `recordOn` nor `ignoreOn` does not count as a failure: it
+is recorded as a successful call (it enters the window as a non-failure, emits a successful `CallRecorded`, and in
+HalfOpen counts as a passed test call). The exception still reaches the caller unchanged. To keep such an exception
+out of the circuit's accounting altogether, list it in `ignoreOn`.
+
+An ignored call is neither a success nor a failure: it is not added to the sliding window, emits no `CallRecorded`,
+and never evaluates a transition. The exception still reaches the caller unchanged (`call()` throws it, `outcome()`
+returns it as a `Failure`). In HalfOpen, an ignored call gives its test-call permit back, so another call can be the
+test call; otherwise a HalfOpen episode whose permits all went to ignored calls would reject every call forever. The
+circuit stays HalfOpen for as long as every call is ignored, since there is no signal about the downstream either way
+(the Closed equivalent: the window never fills, so the circuit never opens). A stale call (see above) holds no permit
+of the current generation, so it gives nothing back.
 
 A result predicate (`recordOnResult`) can also record a failure based on the return value, even if no exception was
 thrown.
@@ -142,6 +156,7 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 - **Closed** — circuit transitioned to Closed. Carries: name, number of successful test calls.
 - **HalfOpened** — circuit transitioned to HalfOpen. Carries: name.
 - **CallRecorded** — a call outcome was recorded. Carries: name, success/failure, elapsed time, current failure rate.
+  Not emitted for a call whose exception is ignored via `ignoreOn`.
 - **Rejected** — a call was rejected without executing, because the circuit was Open or HalfOpen with no test-call
   permits left. Carries: name, phase (`OPEN` or `HALF_OPEN`). Not emitted for a call that proceeds to a HalfOpen test
   call after the wait duration elapses.
