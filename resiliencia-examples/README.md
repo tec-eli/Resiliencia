@@ -15,6 +15,17 @@ not depended on.
 - One class per scenario (e.g. `RetryExample`), each with a `main` method and no shared framework —
   a reader should be able to open one file and understand it standalone.
 
+## Examples
+
+| Class                   | Shows                                                                    |
+|-------------------------|--------------------------------------------------------------------------|
+| `RetryExample`          | Success after retry, exhaustion, event listening                         |
+| `TimeoutExample`        | Within deadline, `ResilientTimeoutException`, `outcome()`                |
+| `CircuitBreakerExample` | Closed → Open → HalfOpen → Closed, rejection while open                  |
+| `BulkheadExample`       | Concurrent-call cap, `BulkheadFullException`, permit release             |
+| `RateLimiterExample`    | Calls per period, `RateLimiterException`, `outcome()`                    |
+| `PolicyExample`         | Retry + Timeout composition, `useOptimumOrder`, invalid order rejection  |
+
 ## Running
 
 ```bash

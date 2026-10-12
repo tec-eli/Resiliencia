@@ -7,112 +7,106 @@ import io.github.teceli.resiliencia.patterns.retry.RetryEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 /**
- * Example: Policy composition with Retry pattern and synchronous execution.
+ * Example: Retry composed into a Policy and executed synchronously.
  *
- * This is the MVP showing:
- * 1. Configure a Retry pattern (max 3 attempts, exponential backoff)
- * 2. Compose it into a Policy
- * 3. Execute synchronously: get result or exception
- * 4. Listen to retry events for observability
+ * <ol>
+ *   <li>Success after a transient failure</li>
+ *   <li>Retry exhaustion</li>
+ *   <li>Observing retry events through a listener</li>
+ * </ol>
  */
-public class RetryExample {
+public final class RetryExample {
     private static final Logger log = LoggerFactory.getLogger(RetryExample.class);
 
     private static final int MAX_ATTEMPTS = 3;
-    private static final int INITIAL_DELAY_MS = 50;
+    private static final long INITIAL_DELAY_MS = 50;
     private static final double BACKOFF_MULTIPLIER = 2.0;
 
     private static final String RESULT = "Result: {}";
     private static final String TOTAL_ATTEMPTS = "Total attempts: {}";
-    private static final String EXCEPTION = "Exception: {}";
+    private static final String FAILURE = "Failure: {}";
+
+    private RetryExample() {
+    }
 
     public static void main(String[] args) {
-        log.info("=== Resiliencia MVP: Policy + Retry + Sync Execution ===");
-
-        // Example 1: Successful operation with retry
+        log.info("=== Retry ===");
         exampleSuccessAfterRetry();
-
-        // Example 2: Operation that exhausts retries
         exampleRetryExhaustion();
-
-        // Example 3: Operation with event listening
         exampleWithEventListener();
     }
 
     static void exampleSuccessAfterRetry() {
-        log.info("Example 1: Success after retry (with custom predicate)");
+        log.info("Example 1: Success after retry");
 
-        var counter = new Object() { int value = 0; };
+        var attempts = new AtomicInteger();
 
-        // Default Retry only retries IOException; for other exceptions, use withShouldRetry
+        // The default Retry only retries IOException; this example fails with an unchecked exception
         var retry = Retry.<String>create("success-after-retry")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
                 .withBackoffMultiplier(BACKOFF_MULTIPLIER)
-                .withShouldRetry(e -> true);  // Retry all exceptions for this example
+                .withShouldRetry(error -> true);
 
         var policy = Policy.compose(retry);
 
         try {
             var result = policy.call(() -> {
-                counter.value++;
-                if (counter.value < 2) {
-                    throw new RuntimeException("Simulated failure on attempt " + counter.value);
+                var attempt = attempts.incrementAndGet();
+                if (attempt < 2) {
+                    throw new IllegalStateException("Simulated failure on attempt " + attempt);
                 }
-                return "Success on attempt " + counter.value;
+                return "Success on attempt " + attempt;
             });
             log.info(RESULT, result);
-            log.info(TOTAL_ATTEMPTS, counter.value);
+            log.info(TOTAL_ATTEMPTS, attempts.get());
         } catch (ResilientException e) {
-            log.warn(EXCEPTION, e.getMessage());
+            log.warn(FAILURE, e.getMessage());
         }
     }
 
     static void exampleRetryExhaustion() {
         log.info("Example 2: Retry exhaustion");
 
-        var counter = new Object() { int value = 0; };
+        var attempts = new AtomicInteger();
 
         var retry = Retry.<String>create("retry-exhaustion")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
-                .withShouldRetry(e -> true);  // Retry all exceptions for this example
+                .withShouldRetry(error -> true);
 
         var policy = Policy.compose(retry);
 
         try {
             var result = policy.call(() -> {
-                counter.value++;
-                throw new RuntimeException("Always fails (attempt " + counter.value + ")");
+                throw new IllegalStateException("Always fails (attempt " + attempts.incrementAndGet() + ")");
             });
             log.info(RESULT, result);
         } catch (ResilientException e) {
-            log.warn(EXCEPTION, e.getMessage());
-            log.info(TOTAL_ATTEMPTS, counter.value);
+            log.warn(FAILURE, e.getMessage());
+            log.info(TOTAL_ATTEMPTS, attempts.get());
         }
     }
 
     static void exampleWithEventListener() {
         log.info("Example 3: Event listening");
 
-        var counter = new Object() { int value = 0; };
+        var attempts = new AtomicInteger();
 
         var retry = Retry.<String>create("retry-with-listener")
                 .withMaxAttempts(MAX_ATTEMPTS)
                 .withInitialDelay(INITIAL_DELAY_MS)
-                .withShouldRetry(e -> true)  // Retry all exceptions for this example
+                .withShouldRetry(error -> true)
                 .withListener(event -> {
-                    switch (event) {
-                        case RetryEvent.AttemptFailed attempt ->
-                                log.debug("Attempt {} failed: {}", attempt.attemptNumber(),
-                                        attempt.error().getMessage());
-                        case RetryEvent.Success success ->
-                                log.debug("Success after {} attempts", success.totalAttempts());
-                        case RetryEvent.Exhausted exhausted ->
-                                log.debug("Exhausted after {} attempts", exhausted.totalAttempts());
-                        default -> {
-                        }
+                    if (event instanceof RetryEvent.AttemptFailed failed) {
+                        log.info("Attempt {} failed: {}", failed.attemptNumber(), failed.error().getMessage());
+                    } else if (event instanceof RetryEvent.Success success) {
+                        log.info("Succeeded after {} attempts", success.totalAttempts());
+                    } else if (event instanceof RetryEvent.Exhausted exhausted) {
+                        log.info("Exhausted after {} attempts", exhausted.totalAttempts());
                     }
                 });
 
@@ -120,15 +114,15 @@ public class RetryExample {
 
         try {
             var result = policy.call(() -> {
-                counter.value++;
-                if (counter.value < 3) {
-                    throw new RuntimeException("Fail attempt " + counter.value);
+                var attempt = attempts.incrementAndGet();
+                if (attempt < MAX_ATTEMPTS) {
+                    throw new IllegalStateException("Fail attempt " + attempt);
                 }
                 return "Success!";
             });
             log.info(RESULT, result);
         } catch (ResilientException e) {
-            log.warn(EXCEPTION, e.getMessage());
+            log.warn(FAILURE, e.getMessage());
         }
     }
 }

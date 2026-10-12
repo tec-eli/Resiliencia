@@ -8,7 +8,7 @@ calls to a degraded downstream service from propagating load.
 ## Behavior
 
 The CircuitBreaker maintains a sliding window of the last N call outcomes. After each call it recalculates the failure
-rate and the slow-call rate. If either rate exceeds its threshold, the circuit opens.
+rate and the slow-call rate. If either rate reaches or exceeds its threshold, the circuit opens.
 
 When open, all calls are rejected immediately without executing the operation. After a configured wait, the circuit
 moves to half-open and allows a small number of test calls through. If those succeed, the circuit closes. If any fail,
@@ -26,10 +26,15 @@ Three states:
 
 Transitions:
 
-- `Closed → Open` when failure rate or slow-call rate exceeds its threshold, evaluated after the sliding window is full
+- `Closed → Open` when failure rate or slow-call rate reaches or exceeds its threshold, evaluated after the sliding
+  window is full
 - `Open → HalfOpen` after `waitDurationInOpenState` elapses
 - `HalfOpen → Closed` when all permitted test calls succeed
 - `HalfOpen → Open` when any permitted test call fails
+
+The sliding window is reset on `HalfOpen → Closed`, so a newly closed circuit starts evaluating from an empty window.
+It is not reset when the circuit opens or moves to HalfOpen: HalfOpen never reads the window, it only counts its own
+test calls.
 
 The current state is inspectable at any time. The `Open` state carries the timestamp it was entered and the remaining
 wait duration.
@@ -58,13 +63,22 @@ call, so the winning failure is not necessarily the first trial call that was ad
 
 The other admitted trial calls are never aborted: the breaker has no cancellation mechanism for a call it has
 already let through, so every admitted trial call always runs to completion regardless of what the state does in
-the meantime. Each one is still recorded into the sliding window and reported via `CallRecorded` — that bookkeeping
-happens unconditionally, before the current state is even consulted. What changes is only what happens *after* the
-recording: once the shared HalfOpen state has already been swapped out by the winning failure, any other trial
-call's own attempt to act on its outcome against that same, now-stale state fails its compare-and-swap and is a
-no-op — whether that other outcome was itself a failure (no second `Opened` event, `openedAt` is not pushed later by
-a straggler) or a success (it does not spuriously count toward closing a circuit that is already Open). Exactly one
-`Opened` event is emitted per HalfOpen episode, no matter how many admitted trial calls fail.
+the meantime. Every admitted call remembers the state generation that admitted it, and its outcome is only
+attributed to that generation. If the circuit has since moved on, the call is *stale*: a call admitted while Closed
+that finishes after the circuit went Open and HalfOpen, or a trial call whose HalfOpen episode already ended. A stale
+call is not added to the sliding window and never evaluates a transition, so it can neither close nor reopen a
+generation in which it never held a permit. A call still in its own generation whose shared state was already swapped
+out by the winning failure fails its compare-and-swap and is a no-op — whether that outcome was itself a failure (no
+second `Opened` event, `openedAt` is not pushed later by a straggler) or a success (it does not spuriously count
+toward closing a circuit that is already Open). Exactly one `Opened` event is emitted per HalfOpen episode, no matter
+how many admitted trial calls fail.
+
+A stale call is still reported via `CallRecorded`, with its real outcome and elapsed time, because the call really
+happened: every call that runs emits exactly one `CallRecorded`, except calls ignored via `ignoreOn`, which are never
+recorded. For metrics this means the call counter and the duration timer count every call, stale ones included,
+while the failure-rate gauge and every breaker decision only consider the sliding window, which holds calls of the
+current generation. The counters therefore never reconcile with the window, which only covers the last N calls
+anyway.
 
 This is the same single-permit-per-trial admission model as the Closed race, mirrored rather than contradicted:
 calls that make their first admission check only after the flip to Open see Open and are rejected (or start
@@ -75,7 +89,8 @@ are just the current state, freshly re-checked at admission time, doing what it 
 
 ### Rate thresholds
 
-Both thresholds are expressed as fractions between 0.0 and 1.0. A value of `0.5` means 50%.
+Both thresholds are expressed as fractions between 0.0 (exclusive) and 1.0 (inclusive). A value of `0.5` means 50%.
+A threshold is met when the rate is greater than or equal to it.
 
 - **Failure rate** — fraction of calls that threw a recorded exception
 - **Slow-call rate** — fraction of calls that exceeded `slowCallDurationThreshold`
@@ -88,34 +103,58 @@ closed regardless of outcomes.
 `recordOn` defines which exception types count as failures. `ignoreOn` defines which are never recorded. `ignoreOn`
 takes precedence — an exception matched by both is ignored.
 
+When `recordOn` is set, an exception that matches neither `recordOn` nor `ignoreOn` does not count as a failure: it
+is recorded as a successful call (it enters the window as a non-failure, emits a successful `CallRecorded`, and in
+HalfOpen counts as a passed test call). The exception still reaches the caller unchanged. To keep such an exception
+out of the circuit's accounting altogether, list it in `ignoreOn`.
+
+An ignored call is neither a success nor a failure: it is not added to the sliding window, emits no `CallRecorded`,
+and never evaluates a transition. The exception still reaches the caller unchanged (`call()` throws it, `outcome()`
+returns it as a `Failure`). In HalfOpen, an ignored call gives its test-call permit back, so another call can be the
+test call; otherwise a HalfOpen episode whose permits all went to ignored calls would reject every call forever. The
+circuit stays HalfOpen for as long as every call is ignored, since there is no signal about the downstream either way
+(the Closed equivalent: the window never fills, so the circuit never opens). A stale call (see above) holds no permit
+of the current generation, so it gives nothing back.
+
 A result predicate (`recordOnResult`) can also record a failure based on the return value, even if no exception was
-thrown.
+thrown. A predicate that throws is treated as returning `false`: the call is recorded as successful, so a broken
+predicate never turns a successful call into a reported failure. If the predicate throws an `Exception`, it is
+logged as a warning. If it throws an `Error`, the call is recorded as successful first and the `Error` then
+propagates.
 
 `Error` is never matched by `recordOn`/`ignoreOn` — it isn't a business failure. A `java.lang.Error` signals a
 condition the JVM itself may not recover from, so it is never wrapped into `Outcome.Failure` or evaluated against
 these filters; it always propagates uncaught on the calling thread (library-wide convention, see "Error handling" in
-`docs/architecture/ARCHITECTURE.md`). In HalfOpen, an `Error` still resolves the consumed test-call permit (counted
-as a failed test call) before propagating, so it cannot leak the HalfOpen budget.
+`docs/architecture/ARCHITECTURE.md`). An `Error` thrown by the operation is still recorded as a failed call before
+propagating, so the circuit's accounting stays consistent: in HalfOpen it resolves the consumed test-call permit
+(counted as a failed test call), so it cannot leak the HalfOpen budget; in Closed it enters the sliding window as a
+failure and counts toward the failure rate like any other recorded failure.
+
+Each call is recorded exactly once. An `Error` thrown while the call is being recorded — for example by a listener
+handling `CallRecorded` — propagates to the caller, but it does not change how that call was recorded.
 
 ---
 
 ## Configuration surface
 
-| Property                        | Required | Description                                                    |
-|---------------------------------|----------|----------------------------------------------------------------|
-| `name`                          | yes      | Identifier used in events and exceptions (instance-specific)   |
-| `failureRateThreshold`          | no       | Fraction of failures that triggers open. Default: 0.5          |
-| `slowCallRateThreshold`         | no       | Fraction of slow calls that triggers open. Default: 1.0        |
-| `slowCallDurationThreshold`     | no       | What counts as a slow call. Default: no limit                  |
-| `slidingWindowSize`             | no       | Number of calls evaluated for rate calculation. Default: 10    |
-| `waitDurationInOpenState`       | no       | Time in Open before transitioning to HalfOpen. Default: 60s    |
-| `permittedCallsInHalfOpenState` | no       | Test calls allowed in HalfOpen. Default: 3                     |
-| `recordOn`                      | no       | Exception types that count as failures. Default: any Exception |
-| `ignoreOn`                      | no       | Exception types that are not recorded                          |
-| `recordOnResult`                | no       | Predicate — record a failure based on return value             |
-| `withListener()`                | no       | Subscribe to circuit events (e.g. Opened, Closed, CallRecorded)|
-| `withClock()`                   | no       | Use custom Clock instead of system (mainly for testing)        |
-| `state()`                       | inspect  | Get current state (Closed/Open/HalfOpen) with remaining wait   |
+| Property                        | Required | Description                                                                              |
+|---------------------------------|----------|------------------------------------------------------------------------------------------|
+| `name`                          | yes      | Identifier used in events and exceptions (instance-specific)                             |
+| `failureRateThreshold`          | no       | Fraction of failures that triggers open. Must be in (0.0, 1.0]. Default: 0.5             |
+| `slowCallRateThreshold`         | no       | Fraction of slow calls that triggers open. Must be in (0.0, 1.0]. Default: 1.0           |
+| `slowCallDurationThreshold`     | no       | A call taking longer than this is slow. Must be >= 0, not null. Default: no limit        |
+| `slidingWindowSize`             | no       | Number of calls evaluated for rate calculation. Must be >= 1. Default: 10                |
+| `waitDurationInOpenState`       | no       | Time in Open before transitioning to HalfOpen. Must be >= 0, not null. Default: 60s      |
+| `permittedCallsInHalfOpenState` | no       | Test calls allowed in HalfOpen. Must be >= 1. Default: 3                                 |
+| `recordOn`                      | no       | Exception types that count as failures. Default: any Exception                           |
+| `ignoreOn`                      | no       | Exception types that are not recorded                                                    |
+| `recordOnResult`                | no       | Predicate — record a failure based on return value                                       |
+| `withListener()`                | no       | Subscribe to circuit events (e.g. Opened, Closed, CallRecorded)                          |
+| `withClock()`                   | no       | Use custom Clock instead of system (mainly for testing)                                  |
+| `state()`                       | inspect  | Get current state (Closed/Open/HalfOpen) with remaining wait                             |
+
+Invalid values are rejected when the instance is built: `IllegalArgumentException` for an out-of-range value,
+`NullPointerException` for `null`.
 
 ---
 
@@ -130,10 +169,14 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 
 ## Events
 
-- **Opened** — circuit transitioned to Open. Carries: name, reason.
+- **Opened** — circuit transitioned to Open. Carries: name, reason. From Closed, the reason is
+  `FAILURE_RATE_EXCEEDED` or `SLOW_CALL_RATE_EXCEEDED` (failure rate is checked first, so when both are met it is
+  reported as `FAILURE_RATE_EXCEEDED`). From HalfOpen, a failed test call reopens the circuit without evaluating any
+  rate, and the reason is always `FAILURE_RATE_EXCEEDED`.
 - **Closed** — circuit transitioned to Closed. Carries: name, number of successful test calls.
 - **HalfOpened** — circuit transitioned to HalfOpen. Carries: name.
 - **CallRecorded** — a call outcome was recorded. Carries: name, success/failure, elapsed time, current failure rate.
+  Not emitted for a call whose exception is ignored via `ignoreOn`.
 - **Rejected** — a call was rejected without executing, because the circuit was Open or HalfOpen with no test-call
   permits left. Carries: name, phase (`OPEN` or `HALF_OPEN`). Not emitted for a call that proceeds to a HalfOpen test
   call after the wait duration elapses.
@@ -142,5 +185,7 @@ as a failed test call) before propagating, so it cannot leak the HalfOpen budget
 
 ## Failure
 
-Throws `CircuitBreakerOpenException` when a call is rejected because the circuit is open. Fields: name, open since,
-remaining wait.
+Throws `CircuitBreakerOpenException` when a call is rejected: either the circuit is Open, or it is HalfOpen and every
+test-call permit has already been issued. Fields: name, open since, remaining wait. `openSince()` and
+`remainingWait()` return `Optional`: both are present for an Open rejection and empty for a HalfOpen one, which has
+nothing equivalent to report.
