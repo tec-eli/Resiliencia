@@ -554,6 +554,58 @@ class CircuitBreakerPatternTest {
     }
 
     @Test
+    void should_recordSuccessfulCallOnce_when_listenerThrowsErrorOnCallRecorded() {
+        var throwOnce = new AtomicInteger(1);
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withSlidingWindowSize(2)
+                .withFailureRateThreshold(0.5)
+                .withListener(event -> {
+                    if (event instanceof CircuitBreakerEvent.CallRecorded && throwOnce.getAndDecrement() > 0) {
+                        throw new TestError();
+                    }
+                });
+
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> "done"));
+        circuitBreaker.outcome(() -> "done");
+
+        // Window holds two successes: the first call was not recorded again as a failure.
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
+    void should_recordCallAsSuccessful_when_recordOnResultThrowsError() {
+        var events = new ArrayList<CircuitBreakerEvent>();
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+                .withRecordOnResult(result -> {
+                    throw new TestError();
+                })
+                .withListener(event -> events.add((CircuitBreakerEvent) event));
+
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> "done"));
+
+        assertThat(events)
+                .filteredOn(CircuitBreakerEvent.CallRecorded.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(CircuitBreakerEvent.CallRecorded.class,
+                        recorded -> assertThat(recorded.isSuccessful()).isTrue());
+    }
+
+    @Test
+    void should_resolveHalfOpenPermitAndClose_when_recordOnResultThrowsError() {
+        var clock = new ManualClock();
+        var circuitBreaker = openCircuit(baseCircuitBreaker(clock)
+                .withPermittedCallsInHalfOpenState(1)
+                .withRecordOnResult(result -> {
+                    throw new TestError();
+                }));
+        clock.advance(WAIT_DURATION);
+
+        assertThrows(TestError.class, () -> circuitBreaker.outcome(() -> "done"));
+
+        assertThat(circuitBreaker.state()).isInstanceOf(CircuitState.Closed.class);
+    }
+
+    @Test
     void should_countErrorTowardFailureRate_when_thrownWhileClosed() {
         // An Error is never wrapped into Outcome, but it is still recorded into the sliding
         // window as a failed call (see CircuitBreaker.outcome()'s catch (Error e) block). This
@@ -656,6 +708,39 @@ class CircuitBreakerPatternTest {
             cb2.withRecordOnResult(null));
         assertThrows(NullPointerException.class, () ->
             cb2.withClock(null));
+    }
+
+    @Test
+    void should_throwIllegalArgumentException_when_waitDurationInOpenStateIsNegative() {
+        var circuitBreaker = CircuitBreaker.<String>of("test");
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> circuitBreaker.withWaitDurationInOpenState(Duration.ofMillis(-1)));
+    }
+
+    @Test
+    void should_throwIllegalArgumentException_when_slowCallDurationThresholdIsNegative() {
+        var circuitBreaker = CircuitBreaker.<String>of("test");
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> circuitBreaker.withSlowCallDurationThreshold(Duration.ofMillis(-1)));
+    }
+
+    @Test
+    void should_throwNullPointerException_when_slowCallDurationThresholdIsNull() {
+        var circuitBreaker = CircuitBreaker.<String>of("test");
+
+        assertThatNullPointerException()
+            .isThrownBy(() -> circuitBreaker.withSlowCallDurationThreshold(null));
+    }
+
+    @Test
+    void should_acceptZeroDurations_when_configured() {
+        var circuitBreaker = CircuitBreaker.<String>of("test")
+            .withWaitDurationInOpenState(Duration.ZERO)
+            .withSlowCallDurationThreshold(Duration.ZERO);
+
+        assertThat(circuitBreaker.call(() -> "done")).isEqualTo("done");
     }
 
     @Test

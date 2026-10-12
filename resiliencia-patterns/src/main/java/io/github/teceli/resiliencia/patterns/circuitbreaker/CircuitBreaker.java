@@ -74,7 +74,13 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         if (slidingWindowSize < 1) {
             throw new IllegalArgumentException("slidingWindowSize must be >= 1");
         }
+        if (slowCallDurationThreshold != null && slowCallDurationThreshold.isNegative()) {
+            throw new IllegalArgumentException("slowCallDurationThreshold must be >= 0");
+        }
         Objects.requireNonNull(waitDurationInOpenState, "waitDurationInOpenState must not be null");
+        if (waitDurationInOpenState.isNegative()) {
+            throw new IllegalArgumentException("waitDurationInOpenState must be >= 0");
+        }
         if (permittedCallsInHalfOpenState < 1) {
             throw new IllegalArgumentException("permittedCallsInHalfOpenState must be >= 1");
         }
@@ -133,9 +139,11 @@ public final class CircuitBreaker<T> implements Resilient<T> {
     }
 
     /**
-     * What counts as a slow call. Default: no limit — no call is ever counted as slow.
+     * What counts as a slow call: a call taking longer than this. Must be at least zero.
+     * Default: no limit — no call is ever counted as slow.
      */
     public CircuitBreaker<T> withSlowCallDurationThreshold(Duration slowCallDurationThreshold) {
+        Objects.requireNonNull(slowCallDurationThreshold, "slowCallDurationThreshold must not be null");
         return new CircuitBreaker<>(name, failureRateThreshold, slowCallRateThreshold,
             slowCallDurationThreshold, slidingWindowSize, waitDurationInOpenState,
             permittedCallsInHalfOpenState, recordOn, ignoreOn, recordOnResult, listeners, clock);
@@ -153,7 +161,7 @@ public final class CircuitBreaker<T> implements Resilient<T> {
 
     /**
      * How long the circuit stays Open before moving to HalfOpen to try test calls again.
-     * Default: 60 seconds.
+     * Must be at least zero. Default: 60 seconds.
      */
     public CircuitBreaker<T> withWaitDurationInOpenState(Duration waitDurationInOpenState) {
         return new CircuitBreaker<>(name, failureRateThreshold, slowCallRateThreshold, slowCallDurationThreshold,
@@ -296,10 +304,12 @@ public final class CircuitBreaker<T> implements Resilient<T> {
         }
         var admittedBy = admission.slot();
         var start = clock.instant();
+        // Only the operation runs inside this try: recording happens outside it, so an Error
+        // thrown while recording (e.g. by a listener) can never be caught here and recorded a
+        // second time as a failure.
+        T result;
         try {
-            var result = operation.execute();
-            recordOutcome(admittedBy, testRecordOnResult(result), start);
-            return new Outcome.Success<>(result);
+            result = operation.execute();
         } catch (Exception e) {
             if (isIgnored(e)) {
                 releaseHalfOpenPermit(admittedBy);
@@ -314,6 +324,25 @@ public final class CircuitBreaker<T> implements Resilient<T> {
             recordOutcome(admittedBy, true, start);
             throw e;
         }
+        recordSuccessfulCall(admittedBy, result, start);
+        return new Outcome.Success<>(result);
+    }
+
+    /**
+     * Records a call whose operation returned normally, as a failure only if {@code recordOnResult}
+     * says so. A predicate throwing an {@code Error} is treated as {@code false}, the same as one
+     * throwing an {@code Exception}: the call is still recorded as successful, resolving any
+     * HalfOpen permit it holds, before the {@code Error} propagates.
+     */
+    private void recordSuccessfulCall(StateSlot admittedBy, T result, Instant start) {
+        boolean failed;
+        try {
+            failed = testRecordOnResult(result);
+        } catch (Error e) {
+            recordOutcome(admittedBy, false, start);
+            throw e;
+        }
+        recordOutcome(admittedBy, failed, start);
     }
 
     /**

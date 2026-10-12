@@ -161,8 +161,9 @@ Concretely, across `resiliencia-patterns`:
   rethrowing — same rationale as `CircuitBreaker`'s permit bookkeeping below: this is event bookkeeping, not
   turning the `Error` into a business outcome.
 - `CircuitBreaker` additionally must resolve any HalfOpen test-call permit an `Error` consumed (a one-shot budget
-  counter, not a releasable semaphore) — it catches `Error` solely to call `recordOutcome(true, ...)` before
-  rethrowing, so the circuit can still transition out of HalfOpen. This is bookkeeping, not error swallowing: the
+  counter, not a releasable semaphore) — it catches `Error` solely to record the call as failed before
+  rethrowing, so the circuit can still transition out of HalfOpen. The same recording also applies in Closed, where
+  the call enters the sliding window as a failure. This is bookkeeping, not error swallowing: the
   `Error` is never turned into an `Outcome.Failure`, and no other pattern needs an equivalent because none of them
   hold state that an unresolved call could leak.
 
