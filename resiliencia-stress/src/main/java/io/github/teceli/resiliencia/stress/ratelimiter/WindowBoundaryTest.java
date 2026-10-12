@@ -18,16 +18,27 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Verifies that window boundaries are handled atomically: calls racing at a
  * window boundary must not have permits double-counted or lost.
  *
- * Setup: Two windows, each with limit 3. Use a manual clock to position actors
- * such that some operate in window 1 and some in window 2, with some potentially
- * racing at the boundary. Verify that no permit is ever double-counted and the
- * total admissions across both windows equals the sum of their limits (3 + 3 = 6).
+ * Setup: two windows, each with limit 3. A single actor advances the clock by exactly
+ * one {@code PERIOD}, so the window 1 → window 2 transition itself is deterministic;
+ * the other five actors only call {@code attemptAcquire()}, so which side of that one
+ * transition each of them lands on is still genuinely racy. Every attempt is either
+ * admitted or rejected (never lost), and neither window can admit more than its limit,
+ * so total admissions across the run must be one of 3, 4, 5, or 6 with admitted +
+ * rejected always equal to 6.
  */
 @JCStressTest
 @State
 @Outcome(id = "6, 0", expect = Expect.ACCEPTABLE,
-        desc = "Exactly 6 permits admitted across two windows (3 each), boundary handled atomically.")
-@Outcome(expect = Expect.FORBIDDEN, desc = "Either more/fewer than 6 admits, or window boundary was corrupted.")
+        desc = "Both windows filled (3 each): all non-advancing actors landed 3-and-3 across the boundary.")
+@Outcome(id = "5, 1", expect = Expect.ACCEPTABLE,
+        desc = "5 admitted: one window got only 1-2 attempts, so it couldn't fill to 3.")
+@Outcome(id = "4, 2", expect = Expect.ACCEPTABLE,
+        desc = "4 admitted: one window got only 1 attempt, so it couldn't fill to 3.")
+@Outcome(id = "3, 3", expect = Expect.ACCEPTABLE,
+        desc = "3 admitted: the clock advance happened before any other actor read the clock, so all five "
+                + "non-advancing actors landed in the same window as the advancing actor.")
+@Outcome(expect = Expect.FORBIDDEN,
+        desc = "admitted + rejected != 6, or more than 6 admitted: a permit was lost or double-counted.")
 public class WindowBoundaryTest {
 
     private static final int LIMIT = 3;
@@ -41,16 +52,6 @@ public class WindowBoundaryTest {
             .withClock(clock)
             .withMaxWait(Duration.ZERO); // No waiting, fail fast to simplify assertions
 
-    /**
-     * Constructor positions the clock so actors will operate across a window boundary.
-     * Some actors start in window 1, some cross into window 2.
-     */
-    public WindowBoundaryTest() {
-        // Clock starts at time 0 (window 1: [0, 10)).
-        // We'll advance to 9 seconds before some actors run, putting them near the boundary.
-        // Other actors will push past the boundary into window 2.
-    }
-
     private void attemptAcquire() {
         try {
             limiter.call(() -> "ok");
@@ -61,7 +62,8 @@ public class WindowBoundaryTest {
     }
 
     /**
-     * Actors 1-3 run in window 1 (first 3 to acquire get in).
+     * Actors 1-3 only attempt to acquire; each may land in window 1 or window 2
+     * depending on how it's scheduled relative to actor4's clock advance.
      */
     @Actor
     public void actor1() {
@@ -79,31 +81,33 @@ public class WindowBoundaryTest {
     }
 
     /**
-     * Actors 4-6: advance the clock to trigger window 2, then attempt.
-     * If window advance is not atomic with permit counting, a boundary race can corrupt state.
+     * The single actor that advances the clock, by exactly one {@code PERIOD}. This is
+     * the only clock mutation in the run, so the window 1 → window 2 transition itself is
+     * deterministic in magnitude; only its timing relative to the other actors is racy.
+     * This actor's own attempt always lands in window 2, since the advance happens-before
+     * its attemptAcquire() in program order.
      */
     @Actor
     public void actor4() {
-        clock.advance(PERIOD); // Move to window 2
+        clock.advance(PERIOD);
         attemptAcquire();
     }
 
     @Actor
     public void actor5() {
-        clock.advance(PERIOD);
         attemptAcquire();
     }
 
     @Actor
     public void actor6() {
-        clock.advance(PERIOD);
         attemptAcquire();
     }
 
     /**
-     * Captures the final state: {@code r.r1 = admittedCount} (expect 6: 3 from window 1, 3 from window 2).
-     * A boundary corruption could result in fewer or more admits (e.g., permit loss or
-     * double-counting when window boundary is crossed).
+     * Captures the final state: {@code r.r1 = admittedCount}, {@code r.r2 = rejectedCount}.
+     * The two must always sum to 6 (every attempt is admitted or rejected, never lost), and
+     * admittedCount must land in {3, 4, 5, 6} depending on how the six attempts split across
+     * the boundary. Anything else indicates permit loss or double-counting.
      */
     @Arbiter
     public void arbiter(II_Result r) {
